@@ -1,0 +1,22 @@
+[package]
+name = "life-dashboard-planner"
+version = "0.1.0"
+description = "Life Dashboard AI Planner"
+authors = ["you"]
+edition = "2021"
+
+[lib]
+name = "life_dashboard_planner_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync", "io-util"] }
+axum = "0.7"
+tower-http = { version = "0.6", features = ["cors"] }
