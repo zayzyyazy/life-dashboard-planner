@@ -1,3 +1,4 @@
+import { getEnvStatus } from "../config.js";
 import { Router } from "express";
 import { processChat, processCapture } from "../services/chat.js";
 import { addWatchedRepo, checkRepo, listWatchedRepos } from "../services/github.js";
@@ -150,5 +151,5 @@ router.get("/messages", (_req, res) => {
 });
 
 router.get("/health", (_req, res) => {
-  res.json({ status: "ok", time: new Date().toISOString() });
+  res.json({ status: "ok", time: new Date().toISOString(), env: getEnvStatus() });
 });

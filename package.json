@@ -10,6 +10,7 @@
     "build": "npm run build:dashboard",
     "build:dashboard": "tsc && vite build",
     "start": "npm run build:dashboard && npm run start --prefix server",
+    "check-env": "node scripts/check-env.mjs",
     "typecheck": "tsc && npm run typecheck --prefix server",
     "install:all": "npm install && npm install --prefix server"
   },
