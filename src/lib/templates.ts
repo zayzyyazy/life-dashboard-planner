@@ -230,6 +230,7 @@ export function applyWeekTemplate(
       tag: slot.tag,
       priority: slot.examDate ? "high" : "medium",
       kind: slot.kind,
+      bucket: slot.startTime ? "scheduled" : "later",
       estimatedHours: slot.defaultHours,
       startTime: slot.startTime,
       endTime: slot.endTime,

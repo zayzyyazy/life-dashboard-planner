@@ -20,6 +20,8 @@ import {
   loadWeekTemplates,
   loadViewWeekStart,
   loadHiddenBuiltinBoxes,
+  loadProjects,
+  saveProjects,
   saveViewWeekStart,
   saveHiddenBuiltinBoxes,
   syncCoursesFromVault,
@@ -40,6 +42,8 @@ import { createTask, createTaskId, nowIso, updateTask } from "../lib/taskUtils";
 import type { ChatMessage, PlannerState } from "../types/planner";
 import type { AppSettings } from "../types/settings";
 import type { ActivityTemplate, CourseDashboardCourse, SavedWeekTemplate } from "../types/template";
+import type { Project, ProjectDraft } from "../types/project";
+import { createProject, updateProject } from "../lib/projectUtils";
 import type { BoxKind } from "../types/box";
 import type { SuggestedTask, Task, TaskDraft } from "../types/task";
 import { shortcutApi } from "../lib/shortcutApi";
@@ -47,8 +51,9 @@ import { hasScheduleDetails } from "../lib/captureParser";
 import { addDays, normalizeTaskDate, startOfWeek, toDateString } from "../lib/dateUtils";
 import { parseCaptureText } from "../lib/captureParser";
 import { enrichSuggestionsWithTimes } from "../lib/scheduleUtils";
+import { inferBucket } from "../lib/bucketUtils";
 
-type Page = "today" | "week" | "month" | "all" | "planner" | "review" | "settings";
+type Page = "dashboard" | "today" | "week" | "month" | "all" | "planner" | "review" | "settings";
 
 function isVaguePlanningIntent(text: string, context: Record<string, string>): boolean {
   if (context.awaiting) return false;
@@ -70,6 +75,7 @@ function planTargetFromText(text: string): string {
 
 type State = {
   tasks: Task[];
+  projects: Project[];
   planner: PlannerState;
   settings: AppSettings;
   templates: ActivityTemplate[];
@@ -86,6 +92,10 @@ type State = {
 };
 
 type Action =
+  | { type: "SET_PROJECTS"; projects: Project[] }
+  | { type: "ADD_PROJECT"; draft: ProjectDraft }
+  | { type: "UPDATE_PROJECT"; id: string; patch: Partial<Project> }
+  | { type: "DELETE_PROJECT"; id: string }
   | { type: "SET_PAGE"; page: Page }
   | { type: "SET_TASKS"; tasks: Task[] }
   | { type: "ADD_TASK"; draft: TaskDraft }
@@ -113,6 +123,25 @@ type Action =
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
+    case "SET_PROJECTS":
+      return { ...state, projects: action.projects };
+    case "ADD_PROJECT":
+      return { ...state, projects: [...state.projects, createProject(action.draft)] };
+    case "UPDATE_PROJECT":
+      return {
+        ...state,
+        projects: state.projects.map((p) =>
+          p.id === action.id ? updateProject(p, action.patch) : p
+        ),
+      };
+    case "DELETE_PROJECT":
+      return {
+        ...state,
+        projects: state.projects.filter((p) => p.id !== action.id),
+        tasks: state.tasks.map((t) =>
+          t.projectId === action.id ? updateTask(t, { projectId: undefined }) : t
+        ),
+      };
     case "SET_PAGE":
       return { ...state, page: action.page };
     case "SET_TASKS":
@@ -141,7 +170,17 @@ function reducer(state: State, action: Action): State {
         }))
       );
       const newTasks = normalized.map((s) =>
-        createTask({ ...s, done: false, source: "capture" })
+        createTask({
+          ...s,
+          done: false,
+          source: "capture",
+          bucket: s.bucket ?? (s.startTime ? "scheduled" : inferBucket({
+            date: s.date,
+            priority: s.priority,
+            startTime: s.startTime,
+            done: false,
+          })),
+        })
       );
       return {
         ...state,
@@ -218,6 +257,7 @@ function initState(): State {
   }
   return {
     tasks: loadTasks(),
+    projects: loadProjects(),
     planner: loadPlannerState(),
     settings,
     templates: loadTemplates(),
@@ -226,7 +266,7 @@ function initState(): State {
     viewWeekStart: loadViewWeekStart(),
     sessionBoxes: [],
     hiddenBuiltinBoxes: loadHiddenBuiltinBoxes(),
-    page: "week",
+    page: "dashboard",
     shortcutStatus: "",
     isMiniMode: false,
     lastAutoSavedCount: 0,
@@ -235,6 +275,9 @@ function initState(): State {
 }
 
 type AppContextValue = State & {
+  addProject: (draft: ProjectDraft) => void;
+  editProject: (id: string, patch: Partial<Project>) => void;
+  removeProject: (id: string) => void;
   navigate: (page: Page) => void;
   addTask: (draft: TaskDraft) => void;
   editTask: (id: string, patch: Partial<Task>) => void;
@@ -311,6 +354,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     saveHiddenBuiltinBoxes(state.hiddenBuiltinBoxes);
   }, [state.hiddenBuiltinBoxes]);
+
+  useEffect(() => {
+    saveProjects(state.projects);
+  }, [state.projects]);
 
   const syncCourseBoxes = useCallback(async () => {
     const vaultCourses = await readCourseDashboardCourses();
@@ -463,6 +510,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ...state,
     provider,
     navigate: (page) => dispatch({ type: "SET_PAGE", page }),
+    addProject: (draft) => dispatch({ type: "ADD_PROJECT", draft }),
+    editProject: (id, patch) => dispatch({ type: "UPDATE_PROJECT", id, patch }),
+    removeProject: (id) => dispatch({ type: "DELETE_PROJECT", id }),
     addTask: (draft) => dispatch({ type: "ADD_TASK", draft }),
     editTask: (id, patch) => dispatch({ type: "UPDATE_TASK", id, patch }),
     removeTask: (id) => dispatch({ type: "DELETE_TASK", id }),
@@ -533,6 +583,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     syncCourseBoxes,
     reloadFromStorage: () => {
       dispatch({ type: "SET_TASKS", tasks: loadTasks() });
+      dispatch({ type: "SET_PROJECTS", projects: loadProjects() });
       dispatch({ type: "SET_TEMPLATES", templates: loadTemplates() });
       dispatch({ type: "SET_COURSES", courses: loadCourses() });
       dispatch({ type: "SET_WEEK_TEMPLATES", weekTemplates: loadWeekTemplates() });

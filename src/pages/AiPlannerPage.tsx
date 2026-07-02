@@ -31,7 +31,7 @@ export function AiPlannerPage() {
 
   useEffect(() => {
     if (lastAutoSavedAt > 0 && settings.planner.autoSave) {
-      setBanner(`${lastAutoSavedCount} task(s) added — see Week or All Tasks`);
+      setBanner(`${lastAutoSavedCount} task(s) added — see Dashboard or Schedule`);
       const t = setTimeout(() => setBanner(""), 5000);
       return () => clearTimeout(t);
     }
@@ -70,8 +70,8 @@ export function AiPlannerPage() {
           <div className="chat-messages">
             {planner.messages.length === 0 && (
               <p className="empty-state">
-                Tell me what you need to do this week — exams, gym, work days, assignments…
-                I'll ask follow-ups and suggest a schedule.
+                Tell me what's on your mind — exams, deadlines, gym, work blocks, random ideas.
+                I'll sort them into must-dos, your schedule, and later.
               </p>
             )}
             {planner.messages.map((m) => (
