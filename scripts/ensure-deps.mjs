@@ -6,6 +6,10 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
+
+// Node 22 required for better-sqlite3
+await import("./check-node.mjs");
+
 const serverDir = path.join(projectRoot, "server");
 const tsxBin = path.join(serverDir, "node_modules", ".bin", "tsx");
 
