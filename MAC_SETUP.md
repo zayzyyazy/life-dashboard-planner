@@ -100,6 +100,8 @@ Remind me in 2 minutes to test reminders
 
 ## Run 24/7 on your Mac
 
+> **Want it running with your Mac off?** See **[DEPLOY_CLOUD.md](./DEPLOY_CLOUD.md)** — deploy to Railway or Fly (~$5/mo).
+
 The agent needs a process running continuously for Telegram, GitHub checks, briefs, and reminders.
 
 **Important:** If your Mac sleeps, the agent pauses until wake. For true 24/7, either:

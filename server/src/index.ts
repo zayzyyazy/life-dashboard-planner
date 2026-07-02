@@ -59,9 +59,9 @@ app.get("*", (req, res, next) => {
   });
 });
 
-app.listen(config.port, () => {
+app.listen(config.port, "0.0.0.0", () => {
   const envStatus = getEnvStatus();
-  console.log(`Life Planner Agent running at http://localhost:${config.port}`);
+  console.log(`Life Planner Agent running on port ${config.port}`);
   console.log(`Health: http://localhost:${config.port}/health`);
   if (envStatus.env_file) {
     console.log(`[config] Loaded .env from ${envStatus.env_file}`);
