@@ -1,32 +1,63 @@
 #!/bin/bash
-# Production daemon — server only, no rebuild (for 24/7 LaunchAgent)
-set -e
-cd "$(dirname "$0")/.."
+# Production daemon — server only (for 24/7 LaunchAgent)
+# Uses NODE_BIN / TSX_BIN from plist when set at install time.
+set -euo pipefail
 
-# fnm / nvm — LaunchAgents get a minimal PATH
-if command -v fnm >/dev/null 2>&1; then
-  eval "$(fnm env --use-on-cd)"
-  fnm use 22 2>/dev/null || true
-elif [ -s "$HOME/.nvm/nvm.sh" ]; then
-  # shellcheck source=/dev/null
-  . "$HOME/.nvm/nvm.sh"
-  nvm use 22 2>/dev/null || true
-fi
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$PROJECT_DIR"
 
-if ! command -v node >/dev/null 2>&1; then
-  echo "[daemon] ERROR: node not found in PATH. Install Node 22 (fnm install 22)." >&2
+log() { echo "[daemon $(date '+%H:%M:%S')] $*"; }
+
+resolve_node() {
+  if [ -n "${NODE_BIN:-}" ] && [ -x "$NODE_BIN" ]; then
+    echo "$NODE_BIN"
+    return 0
+  fi
+  if command -v node >/dev/null 2>&1; then
+    command -v node
+    return 0
+  fi
+  # fnm without fnm CLI on PATH (LaunchAgent)
+  local fnm_root="${FNM_DIR:-$HOME/.local/share/fnm}"
+  if [ -x "$fnm_root/aliases/default/bin/node" ]; then
+    echo "$fnm_root/aliases/default/bin/node"
+    return 0
+  fi
+  return 1
+}
+
+NODE="$(resolve_node)" || {
+  log "ERROR: node not found. Re-run: npm run install:daemon"
   exit 127
-fi
+}
 
-NODE_MAJOR=$(node -v | cut -d. -f1 | tr -d v)
+export PATH="$(dirname "$NODE"):$PATH"
+
+NODE_MAJOR=$("$NODE" -v | cut -d. -f1 | tr -d v)
 if [ "$NODE_MAJOR" -gt 22 ]; then
-  echo "[daemon] ERROR: Node $(node -v) — need v22.x for better-sqlite3." >&2
+  log "ERROR: Node $("$NODE" -v) — need v22.x. Run: fnm use 22"
   exit 1
 fi
 
-node scripts/ensure-deps.mjs
+TSX="${TSX_BIN:-$PROJECT_DIR/server/node_modules/.bin/tsx}"
+if [ ! -f "$TSX" ]; then
+  log "Installing server dependencies…"
+  "$NODE" scripts/ensure-deps.mjs
+fi
+if [ ! -f "$TSX" ]; then
+  log "ERROR: tsx not found at $TSX — run: npm run install:all"
+  exit 1
+fi
+
 if [ ! -d dist ]; then
-  echo "[daemon] Building dashboard (first run)…"
+  log "Building dashboard (first run)…"
   npm run build:dashboard
 fi
-cd server && exec npx tsx src/index.ts
+
+if [ ! -f "$PROJECT_DIR/.env" ]; then
+  log "WARNING: .env not found at $PROJECT_DIR/.env"
+fi
+
+log "Starting server with Node $("$NODE" -v)"
+log "Project: $PROJECT_DIR"
+exec "$NODE" "$TSX" "$PROJECT_DIR/server/src/index.ts"

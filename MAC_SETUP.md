@@ -219,6 +219,7 @@ npm run dev
 | Chat says no OpenAI key | `nano .env` → add `OPENAI_API_KEY` → restart |
 | No GitHub repos | Add `GITHUB_TOKEN` → `npm run setup` |
 | Telegram silent | Only one instance can poll — stop `npm run dev` before `install:daemon`; check token + user ID |
+| LaunchAgent health check failed | Run `npm run test:daemon` to see the error. If logs are empty, **move project off Desktop**: `mv ~/Desktop/life-dashboard-planner ~/life-dashboard-planner` then re-install |
 | LaunchAgent "Load failed: 5" | `git pull` then re-run `npm run install:daemon` (uses `launchctl bootstrap`) |
 | GitHub 401 Bad credentials | Regenerate token at GitHub → Settings → Developer settings → add to `.env` as `GITHUB_TOKEN` |
 | Brief not arriving | Say in chat: "Send me a daily brief every morning" OR `npm run setup` |
