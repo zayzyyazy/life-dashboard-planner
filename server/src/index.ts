@@ -116,7 +116,17 @@ app.listen(config.port, host, () => {
     `[config] TELEGRAM_ALLOWED_USER_IDS: ${envStatus.telegram_allowed_users_configured ? "configured" : "not set"}`
   );
   console.log(`[config] DATA_DIR: ${config.dataDir}`);
+  const rawTz = process.env.TZ?.trim();
   console.log(`[config] TZ: ${config.brief.timezone}`);
+  if (rawTz?.includes("TZ=")) {
+    console.warn(
+      `[config] Malformed TZ in .env ("${rawTz}"). Use exactly: TZ=${config.brief.timezone}`
+    );
+  } else if (rawTz && rawTz !== config.brief.timezone) {
+    console.warn(
+      `[config] TZ was "${rawTz}" — using "${config.brief.timezone}". Fix .env: TZ=${config.brief.timezone}`
+    );
+  }
   if (config.brief.timezone === "America/New_York") {
     console.warn(
       "[config] TZ is America/New_York — if you're in Germany, set TZ=Europe/Berlin in .env and restart"
@@ -125,7 +135,8 @@ app.listen(config.port, host, () => {
   if (!config.openai.apiKey) {
     console.warn("WARNING: OPENAI_API_KEY not set — chat will fail until configured");
   }
-  startScheduler();
+  // Telegram before scheduler — a bad TZ must not prevent the bot from starting
   startTelegramBot().catch((err) => console.error("[telegram] Failed to start:", err));
+  startScheduler();
   runBootTasks().catch(console.error);
 });

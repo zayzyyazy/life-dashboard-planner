@@ -75,9 +75,28 @@ for (const [name, value] of checks) {
   console.log(`${set ? "✓" : required ? "❌" : "⚠"} ${name}: ${preview}`);
 }
 
-const tz = vars.TZ?.trim() || "Europe/Berlin (default)";
-console.log(`✓ TZ: ${tz}`);
-if (!vars.TZ?.trim() || vars.TZ.includes("America/New_York")) {
+function resolveTz(raw) {
+  const fallback = "Europe/Berlin";
+  if (!raw?.trim()) return { resolved: fallback, raw: null, malformed: false };
+  let tz = raw.trim().replace(/^["']|["']$/g, "");
+  const malformed = tz.includes("TZ=");
+  while (tz.startsWith("TZ=")) tz = tz.slice(3).trim();
+  if (!tz) return { resolved: fallback, raw, malformed };
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return { resolved: tz, raw, malformed };
+  } catch {
+    return { resolved: fallback, raw, malformed: true };
+  }
+}
+
+const { resolved: tz, raw: rawTz, malformed: tzMalformed } = resolveTz(vars.TZ);
+console.log(`✓ TZ: ${tz}${rawTz && rawTz !== tz ? ` (from "${rawTz}")` : ""}`);
+if (tzMalformed || rawTz?.includes("TZ=")) {
+  console.log(`❌ Malformed TZ in .env: "${rawTz}"`);
+  console.log(`   Fix: TZ=${tz}   (not TZ=TZ=${tz})`);
+  ok = false;
+} else if (!vars.TZ?.trim() || tz.includes("America/New_York")) {
   console.log("⚠ For Germany use: TZ=Europe/Berlin  (wrong TZ makes reminders show 6h off)");
   warnings++;
 }

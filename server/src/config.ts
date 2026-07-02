@@ -43,6 +43,27 @@ function cleanEnv(value: string | undefined): string {
   return value.trim().replace(/^["']|["']$/g, "");
 }
 
+const DEFAULT_TIMEZONE = "Europe/Berlin";
+
+/** Strip accidental TZ= prefix and validate (e.g. .env has TZ=TZ=Europe/Berlin). */
+export function resolveTimezone(raw: string | undefined): string {
+  if (!raw?.trim()) return DEFAULT_TIMEZONE;
+
+  let tz = cleanEnv(raw);
+  while (tz.startsWith("TZ=")) {
+    tz = tz.slice(3).trim();
+  }
+  if (!tz) return DEFAULT_TIMEZONE;
+
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return tz;
+  } catch {
+    console.warn(`[config] Invalid TZ="${raw}" — falling back to ${DEFAULT_TIMEZONE}`);
+    return DEFAULT_TIMEZONE;
+  }
+}
+
 export const config = {
   projectRoot,
   envFilePath,
@@ -78,7 +99,7 @@ export const config = {
   },
   brief: {
     cron: process.env.DAILY_BRIEF_CRON ?? "0 7 * * *",
-    timezone: process.env.TZ ?? "Europe/Berlin",
+    timezone: resolveTimezone(process.env.TZ),
     enabledByDefault: process.env.DAILY_BRIEF_ENABLED !== "false",
   },
   reminders: {

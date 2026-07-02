@@ -14,6 +14,22 @@ import {
 } from "./proactive.js";
 import { notifyTelegramUsers } from "../telegram/notify.js";
 
+function scheduleWithTimezone(
+  cronExpr: string,
+  label: string,
+  handler: () => void,
+  timezone: string
+): void {
+  try {
+    cron.schedule(cronExpr, handler, { timezone });
+  } catch (err) {
+    console.error(
+      `[scheduler] Failed to schedule ${label} (${cronExpr}) with tz=${timezone}:`,
+      err
+    );
+  }
+}
+
 export function startScheduler() {
   startFolderWatcher();
 
@@ -44,36 +60,42 @@ export function startScheduler() {
     processIdleNudge().catch(console.error);
   });
 
+  const tz = config.brief.timezone;
+
   // Morning outreach: brief + stale projects + ask about the day
-  cron.schedule(
+  scheduleWithTimezone(
     config.proactive.morningCron,
+    "morning outreach",
     () => {
       processMorningOutreach().catch(console.error);
     },
-    { timezone: config.brief.timezone }
+    tz
   );
 
   // Midday stale project nudge
-  cron.schedule(
+  scheduleWithTimezone(
     config.proactive.staleNudgeCron,
+    "stale project nudge",
     () => {
       processStaleProjectNudge().catch(console.error);
     },
-    { timezone: config.brief.timezone }
+    tz
   );
 
   // Evening check-in
-  cron.schedule(
+  scheduleWithTimezone(
     config.proactive.eveningCron,
+    "evening check-in",
     () => {
       processEveningCheckIn().catch(console.error);
     },
-    { timezone: config.brief.timezone }
+    tz
   );
 
   // Daily brief (legacy 7am — morning outreach includes brief; keep for email-only users)
-  cron.schedule(
+  scheduleWithTimezone(
     config.brief.cron,
+    "daily brief",
     async () => {
       const enabled = getSetting("daily_brief_enabled");
       if (enabled !== "true") return;
@@ -95,10 +117,10 @@ export function startScheduler() {
         console.error("[brief] Daily brief failed:", err);
       }
     },
-    { timezone: config.brief.timezone }
+    tz
   );
 
   console.log(
-    `[scheduler] brief=${config.brief.cron} morning=${config.proactive.morningCron} evening=${config.proactive.eveningCron} reminders=${config.reminders.checkCron} github=every30m tz=${config.brief.timezone}`
+    `[scheduler] brief=${config.brief.cron} morning=${config.proactive.morningCron} evening=${config.proactive.eveningCron} reminders=${config.reminders.checkCron} github=every30m tz=${tz}`
   );
 }
