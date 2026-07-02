@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { BucketSection } from "../components/dashboard/BucketSection";
 import { DailyBriefingCard } from "../components/dashboard/DailyBriefingCard";
 import { ProjectCard } from "../components/dashboard/ProjectCard";
+import { AgentMemoryPanel } from "../components/agent/AgentMemoryPanel";
 import { tasksInBucket } from "../lib/bucketUtils";
 import { todayString } from "../lib/dateUtils";
 import { PROJECT_COLORS } from "../types/project";
@@ -11,6 +12,7 @@ export function DashboardPage() {
   const {
     tasks,
     projects,
+    agentMemory,
     navigate,
     toggleDone,
     editTask,
@@ -65,12 +67,14 @@ export function DashboardPage() {
         onOpenChat={() => navigate("planner")}
       />
 
+      <AgentMemoryPanel entries={agentMemory.entries.slice(0, 5)} />
+
       <div className="dashboard-chat-cta" onClick={() => navigate("planner")} role="button" tabIndex={0}
         onKeyDown={(e) => e.key === "Enter" && navigate("planner")}>
         <span className="dashboard-chat-icon">💬</span>
         <div>
-          <strong>Chat to plan your day</strong>
-          <p>Tell me what's on your mind — I'll organize it into must-dos, schedule, and later.</p>
+          <strong>Talk to your agent</strong>
+          <p>Give updates anytime — your agent remembers, plans, and acts across your apps.</p>
         </div>
         <span className="dashboard-chat-arrow">→</span>
       </div>

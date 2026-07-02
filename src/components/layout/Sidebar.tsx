@@ -2,7 +2,7 @@ import { useApp, type Page } from "../../store/AppContext";
 
 const NAV: { id: Page; label: string; icon: string }[] = [
   { id: "dashboard", label: "Dashboard", icon: "🏠" },
-  { id: "planner", label: "Chat", icon: "💬" },
+  { id: "planner", label: "Agent", icon: "🤖" },
   { id: "week", label: "Schedule", icon: "📅" },
   { id: "settings", label: "Settings", icon: "⚙️" },
 ];

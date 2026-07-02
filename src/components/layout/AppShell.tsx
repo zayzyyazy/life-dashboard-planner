@@ -9,7 +9,7 @@ import { useApp } from "../../store/AppContext";
 
 const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
   dashboard: { title: "Dashboard", subtitle: "Your command center" },
-  planner: { title: "Chat Planner", subtitle: "Talk it out — I'll organize your plan" },
+  planner: { title: "Your Agent", subtitle: "Give updates — I'll plan, remember, and act" },
   week: { title: "Schedule", subtitle: "Week calendar view" },
   settings: { title: "Settings", subtitle: "Preferences & integrations" },
 };

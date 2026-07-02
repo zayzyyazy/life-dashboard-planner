@@ -2089,3 +2089,64 @@ a {
   }
 }
 
+/* ── Agent ── */
+
+.agent-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.agent-intro {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.agent-layout .agent-memory-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  overflow-y: auto;
+  max-height: calc(100vh - 220px);
+}
+
+.agent-memory-panel h4 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.agent-memory-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.agent-memory-item {
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+}
+
+.agent-memory-item p {
+  margin: 0.25rem 0;
+  line-height: 1.4;
+}
+
+.agent-memory-item time {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.agent-memory-source {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--accent);
+  letter-spacing: 0.03em;
+}
+
