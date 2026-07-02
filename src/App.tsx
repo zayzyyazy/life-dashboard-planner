@@ -23,6 +23,14 @@ const TABS: { id: Tab; label: string }[] = [
 export default function App() {
   const [tab, setTab] = useState<Tab>("chat");
   const [emailMsg, setEmailMsg] = useState<string | null>(null);
+  const [serverOk, setServerOk] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch("/health")
+      .then((r) => r.json())
+      .then((d) => setServerOk(d?.status === "ok"))
+      .catch(() => setServerOk(false));
+  }, []);
 
   const testEmail = async () => {
     setEmailMsg(null);
@@ -46,6 +54,12 @@ export default function App() {
         </button>
       </header>
       {emailMsg && <p className="banner">{emailMsg}</p>}
+      {serverOk === false && (
+        <p className="error banner">
+          Backend not running. In Terminal: <code>npm run dev</code> — look for{" "}
+          <code>[server] Life Planner Agent running on port 3847</code>
+        </p>
+      )}
 
       <nav className="tabs">
         {TABS.map((t) => (

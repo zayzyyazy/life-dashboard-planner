@@ -8,6 +8,23 @@ Run these on your MacBook in **Terminal**, in order.
 cd ~/Desktop/life-dashboard-planner
 ```
 
+### Node version (important)
+
+Check:
+
+```bash
+node -v
+```
+
+Must be **v22.x.x**. If you see **v26** or higher, install Node 22:
+
+```bash
+brew install fnm
+fnm install 22
+fnm use 22
+node -v
+```
+
 If the folder doesn't exist yet:
 
 ```bash
@@ -194,6 +211,7 @@ npm run dev
 
 | Problem | Fix |
 |---------|-----|
+| `better_sqlite3` / `gyp ERR!` / Node v26 | Use Node 22: `fnm install 22 && fnm use 22`, then `rm -rf node_modules server/node_modules && npm run install:all` |
 | `exit code 127` | `npm run install:all` |
 | Chat says no OpenAI key | `nano .env` → add `OPENAI_API_KEY` → restart |
 | No GitHub repos | Add `GITHUB_TOKEN` → `npm run setup` |

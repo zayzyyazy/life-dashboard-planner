@@ -9,8 +9,11 @@
     "setup": "npx tsx src/setup-cli.ts",
     "typecheck": "tsc --noEmit"
   },
+  "engines": {
+    "node": ">=22.0.0 <=22.x.x"
+  },
   "dependencies": {
-    "better-sqlite3": "^11.8.1",
+    "better-sqlite3": "^11.10.0",
     "chokidar": "^4.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",

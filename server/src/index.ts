@@ -16,6 +16,28 @@ import { startTelegramBot } from "./telegram/bot.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "../..");
 
+const API_PREFIXES = [
+  "/chat",
+  "/capture",
+  "/projects",
+  "/tasks",
+  "/reminders",
+  "/watch",
+  "/updates",
+  "/messages",
+  "/health",
+  "/brief",
+  "/email",
+  "/telegram",
+  "/profile",
+  "/knowledge",
+  "/github",
+];
+
+function isApiPath(pathname: string): boolean {
+  return API_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -23,46 +45,43 @@ app.use(express.json());
 // Initialize database
 getDb();
 
-// API routes (root paths per spec)
+// Health first — always responds even if other routes fail
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", time: new Date().toISOString(), env: getEnvStatus() });
+});
+
+// API routes
 app.use("/", apiRouter);
 app.use("/brief", briefRouter);
 app.use("/email", emailRouter);
 app.use("/telegram", telegramRouter);
 app.use("/", profileRouter);
 
-// Serve dashboard in production
+// Dashboard (production build only)
 const dashboardDist = path.join(rootDir, "dist");
 app.use(express.static(dashboardDist));
-app.get("*", (req, res, next) => {
-  if (
-    req.path.startsWith("/chat") ||
-    req.path.startsWith("/capture") ||
-    req.path.startsWith("/projects") ||
-    req.path.startsWith("/tasks") ||
-    req.path.startsWith("/reminders") ||
-    req.path.startsWith("/watch") ||
-    req.path.startsWith("/updates") ||
-    req.path.startsWith("/messages") ||
-    req.path.startsWith("/health") ||
-    req.path.startsWith("/brief") ||
-    req.path.startsWith("/email") ||
-    req.path.startsWith("/telegram") ||
-    req.path.startsWith("/profile") ||
-    req.path.startsWith("/knowledge") ||
-    req.path.startsWith("/github")
-  ) {
-    next();
+app.get("*", (req, res) => {
+  if (isApiPath(req.path)) {
+    res.status(404).json({ error: "Not found" });
     return;
   }
   res.sendFile(path.join(dashboardDist, "index.html"), (err) => {
-    if (err) next();
+    if (err) res.status(404).send("Dashboard not built. Run: npm run dev");
   });
 });
 
-app.listen(config.port, "0.0.0.0", () => {
+process.on("uncaughtException", (err) => {
+  console.error("[fatal]", err);
+});
+process.on("unhandledRejection", (err) => {
+  console.error("[fatal]", err);
+});
+
+const host = process.env.HOST ?? "127.0.0.1";
+app.listen(config.port, host, () => {
   const envStatus = getEnvStatus();
-  console.log(`Life Planner Agent running on port ${config.port}`);
-  console.log(`Health: http://localhost:${config.port}/health`);
+  console.log(`Life Planner Agent running at http://${host}:${config.port}`);
+  console.log(`Health: http://${host}:${config.port}/health`);
   if (envStatus.env_file) {
     console.log(`[config] Loaded .env from ${envStatus.env_file}`);
   } else {
