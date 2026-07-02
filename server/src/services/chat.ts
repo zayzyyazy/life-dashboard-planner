@@ -9,6 +9,7 @@ import {
   type MessageType,
   type ReplyStyle,
 } from "./memory.js";
+import { formatPersonalContextForPrompt } from "./profile.js";
 
 export interface ChatResult {
   reply: string;
@@ -71,15 +72,26 @@ export async function processChat(
   let reply = handled.reply;
   if (!reply) {
     const context = await buildContext();
+    const personal = formatPersonalContextForPrompt();
     const systemPrompt =
       replyStyle === "short"
-        ? `You are a personal life/project planner assistant on Telegram. Be very concise (1-3 sentences).
-Current context:\n${context}
-Do not claim to run shell commands or delete files.`
-        : `You are a personal life/project planner assistant. Be concise and practical.
+        ? `You are a personal life/project planner assistant on Telegram for ONE specific user. Be very concise (1-3 sentences).
+
+${personal}
+
+Current state:
+${context}
+
+Do not claim to run shell commands or delete files. Keep personal work and university separate.`
+        : `You are a personal life/project planner assistant for ONE specific user. Be concise and practical.
+
+${personal}
+
+Current state:
+${context}
+
 You help track projects, tasks, reminders, and daily planning.
-Current context:\n${context}
-Do not claim to run shell commands or delete files. Ask before destructive actions.`;
+Keep personal work and university separate. Do not claim to run shell commands or delete files. Ask before destructive actions.`;
 
     reply = await chatCompletion(
       [

@@ -278,6 +278,36 @@ button:disabled {
   flex: 1;
 }
 
+.profile-form label,
+.knowledge-add {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-bottom: 0.75rem;
+}
+
+.profile-form textarea,
+.knowledge-add textarea {
+  font-family: inherit;
+  font-size: 0.9375rem;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  resize: vertical;
+}
+
+.knowledge-add select {
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.btn-small {
+  align-self: flex-start;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+}
+
 .telegram-status {
   margin-bottom: 1.25rem;
   padding-bottom: 1rem;

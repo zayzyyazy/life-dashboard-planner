@@ -1,5 +1,12 @@
 import { getDb, setSetting } from "../db/index.js";
 import type { ClassificationResult } from "../agent/classifier.js";
+import {
+  addKnowledge,
+  domainLabel,
+  inferDomainFromText,
+  formatPersonalContextForPrompt,
+} from "./profile.js";
+import { isLifeDomain, type LifeDomain } from "../types/domains.js";
 
 export type MessageSource = "dashboard" | "telegram" | "api";
 export type MessageType = "text" | "voice" | "command";
@@ -281,6 +288,26 @@ export async function handleClassification(
       }
     }
 
+    case "profile_memory":
+    case "general_memory": {
+      const domain = resolveLifeDomain(result, message);
+      const title = extracted.title ?? "Note";
+      const content = extracted.content ?? message;
+      addKnowledge({
+        domain,
+        title,
+        content,
+        source: updateSource,
+      });
+      actions.push("saved_knowledge");
+      return {
+        reply: short
+          ? `Saved to your ${domainLabel(domain)} knowledge.`
+          : `Saved to your ${domainLabel(domain)} knowledge: ${title}`,
+        actions,
+      };
+    }
+
     case "question":
     case "general_memory":
     case "general":
@@ -309,9 +336,17 @@ export async function buildContext(): Promise<string> {
     .get() as { c: number };
 
   return [
+    formatPersonalContextForPrompt(),
+    "",
     `Active projects: ${projects.map((p) => p.name).join(", ")}`,
     `Open tasks: ${openTasks.c}`,
     `Reminders due today or overdue: ${dueReminders.c}`,
     `Project updates today: ${todayUpdates.c}`,
   ].join("\n");
+}
+
+function resolveLifeDomain(result: ClassificationResult, message: string): LifeDomain {
+  const fromClassifier = result.life_domain ?? result.extracted.life_domain;
+  if (fromClassifier && isLifeDomain(fromClassifier)) return fromClassifier;
+  return inferDomainFromText(message);
 }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "./lib/api";
+import { ProfilePanel } from "./components/ProfilePanel";
 import { BriefPanel } from "./components/BriefPanel";
 import { ChatPanel } from "./components/ChatPanel";
 import { ProjectsPanel } from "./components/ProjectsPanel";
@@ -7,13 +8,14 @@ import { TasksPanel } from "./components/TasksPanel";
 import { UpdatesPanel } from "./components/UpdatesPanel";
 import { WatchersPanel } from "./components/WatchersPanel";
 
-type Tab = "chat" | "brief" | "projects" | "tasks" | "watchers" | "updates";
+type Tab = "chat" | "brief" | "projects" | "tasks" | "profile" | "watchers" | "updates";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "chat", label: "Chat" },
   { id: "brief", label: "Brief" },
   { id: "projects", label: "Projects" },
   { id: "tasks", label: "Tasks" },
+  { id: "profile", label: "About you" },
   { id: "watchers", label: "Watchers" },
   { id: "updates", label: "Updates" },
 ];
@@ -62,6 +64,7 @@ export default function App() {
         {tab === "brief" && <BriefPanel />}
         {tab === "projects" && <ProjectsPanel />}
         {tab === "tasks" && <TasksPanel />}
+        {tab === "profile" && <ProfilePanel />}
         {tab === "watchers" && <WatchersPanel />}
         {tab === "updates" && <UpdatesPanel />}
       </main>

@@ -8,6 +8,7 @@ import { router as apiRouter } from "./routes/api.js";
 import { briefRouter } from "./routes/brief.js";
 import { emailRouter } from "./routes/email.js";
 import { telegramRouter } from "./routes/telegram.js";
+import { profileRouter } from "./routes/profile.js";
 import { startScheduler } from "./services/scheduler.js";
 import { startTelegramBot } from "./telegram/bot.js";
 
@@ -26,6 +27,7 @@ app.use("/", apiRouter);
 app.use("/brief", briefRouter);
 app.use("/email", emailRouter);
 app.use("/telegram", telegramRouter);
+app.use("/", profileRouter);
 
 // Serve dashboard in production
 const dashboardDist = path.join(rootDir, "dist");
@@ -43,7 +45,9 @@ app.get("*", (req, res, next) => {
     req.path.startsWith("/health") ||
     req.path.startsWith("/brief") ||
     req.path.startsWith("/email") ||
-    req.path.startsWith("/telegram")
+    req.path.startsWith("/telegram") ||
+    req.path.startsWith("/profile") ||
+    req.path.startsWith("/knowledge")
   ) {
     next();
     return;

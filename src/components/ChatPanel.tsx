@@ -28,8 +28,8 @@ export function ChatPanel() {
     <section className="panel chat-panel">
       <h2>Chat</h2>
       <p className="hint">
-        Try: &quot;Add this to the Marie project&quot;, &quot;Remind me tomorrow to ask Marc&quot;,
-        &quot;Watch this GitHub repo&quot;, &quot;Send me a daily brief every morning&quot;
+        Try: &quot;Remember about me: I study CS and run Leaping AI&quot;, &quot;For university: exam Friday&quot;,
+        &quot;Add this to Marie project&quot;, &quot;Remind me tomorrow…&quot;
       </p>
       <div className="chat-messages">
         {messages.length === 0 && (

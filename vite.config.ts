@@ -17,6 +17,8 @@ export default defineConfig({
       "/brief": "http://localhost:3847",
       "/email": "http://localhost:3847",
       "/telegram": "http://localhost:3847",
+      "/profile": "http://localhost:3847",
+      "/knowledge": "http://localhost:3847",
       "/health": "http://localhost:3847",
     },
   },

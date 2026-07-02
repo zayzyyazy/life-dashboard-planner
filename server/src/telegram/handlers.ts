@@ -3,6 +3,7 @@ import { getDb } from "../db/index.js";
 import { generateDailyBrief } from "../services/brief.js";
 import { processChat } from "../services/chat.js";
 import { addWatchedRepo, checkRepo } from "../services/github.js";
+import { getProfile, listKnowledge, domainLabel } from "../services/profile.js";
 import type { ClassificationResult } from "../agent/classifier.js";
 
 export function isAuthorized(userId: number): boolean {
@@ -26,20 +27,25 @@ export function logUnknownUser(chatId: number, userId: number, username?: string
 }
 
 export const START_MESSAGE =
-  "I'm your Life Planner Agent. Send me text or voice notes. I can save project updates, tasks, reminders, decisions, watch repos/folders, and send briefs.";
+  "I'm your Life Planner Agent — programmed for you, not a generic bot. Send text or voice notes. I separate personal work, university, and life.";
 
 export const HELP_MESSAGE = `Examples:
-• Add this to Marie: Marc fixed birthday path
+• Remember about me: I study computer science at X university
+• For university: algorithms assignment due Friday
+• For personal work: Marie birthday path still needs testing
+• Add this to Marie: Marc fixed the phone path
 • Remind me tomorrow to ask Chris about CRM endpoints
-• Watch this repo https://github.com/owner/repo
-• What changed today?
-• Send me my daily brief
+
+Teach me about you:
+• "Remember: my personal work is Leaping AI and MCP"
+• "For university: I'm taking distributed systems this semester"
 
 Commands:
 /brief — today's brief
 /projects — saved projects
 /tasks — open tasks
 /reminders — upcoming reminders
+/profile — what I know about you
 /watchrepo <url> — watch a GitHub repo
 /help — this message`;
 
@@ -91,7 +97,7 @@ function describeSavedAs(classification: ClassificationResult, actions: string[]
   if (actions.includes("saved_project_update")) return "project update";
   if (actions.includes("created_task")) return "task";
   if (actions.includes("created_reminder")) return "reminder";
-  if (actions.includes("saved_decision")) return "decision";
+  if (actions.includes("saved_knowledge")) return "personal knowledge";
   if (actions.includes("watched_repo")) return "repo watcher";
   if (actions.includes("watched_folder")) return "folder watcher";
   if (actions.includes("generated_brief")) return "daily brief";
@@ -147,6 +153,31 @@ export function handleRemindersCommand(): string {
   return reminders
     .map((r) => `• ${r.message} — ${new Date(r.due_at).toLocaleString()}`)
     .join("\n");
+}
+
+export function handleProfileCommand(): string {
+  const profile = getProfile();
+  const knowledge = listKnowledge().slice(0, 15);
+  const parts: string[] = ["What I know about you:"];
+  if (profile.name) parts.push(`Name: ${profile.name}`);
+  if (profile.summary) parts.push(`Summary: ${profile.summary}`);
+  if (profile.personal_work_context) {
+    parts.push(`Work: ${profile.personal_work_context.slice(0, 200)}`);
+  }
+  if (profile.university_context) {
+    parts.push(`University: ${profile.university_context.slice(0, 200)}`);
+  }
+  if (knowledge.length > 0) {
+    parts.push("\nRecent knowledge:");
+    for (const k of knowledge) {
+      parts.push(`• [${domainLabel(k.domain)}] ${k.title}`);
+    }
+  }
+  if (parts.length === 1) {
+    return "I don't know much about you yet. Tell me: Remember about me: …";
+  }
+  const text = parts.join("\n");
+  return text.length > 3500 ? text.slice(0, 3497) + "…" : text;
 }
 
 export async function handleWatchRepoCommand(url: string): Promise<string> {

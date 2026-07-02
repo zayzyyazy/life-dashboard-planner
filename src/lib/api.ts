@@ -69,6 +69,24 @@ export interface TelegramStatus {
   last_message_at: string | null;
 }
 
+export interface UserProfile {
+  name: string | null;
+  summary: string | null;
+  personal_work_context: string | null;
+  university_context: string | null;
+  personal_life_context: string | null;
+  preferences: string | null;
+}
+
+export interface KnowledgeEntry {
+  id: number;
+  domain: string;
+  title: string;
+  content: string;
+  source: string;
+  created_at: string;
+}
+
 export const api = {
   chat: (message: string) =>
     request<ChatResult>("/chat", { method: "POST", body: JSON.stringify({ message }) }),
@@ -99,4 +117,16 @@ export const api = {
   getWatchedRepos: () => request<unknown[]>("/watch/github"),
   getWatchedFolders: () => request<unknown[]>("/watch/folder"),
   getTelegramStatus: () => request<TelegramStatus>("/telegram/status"),
+
+  getProfile: () =>
+    request<{ profile: UserProfile; knowledge: KnowledgeEntry[] }>("/profile"),
+  updateProfile: (profile: UserProfile) =>
+    request<{ profile: UserProfile }>("/profile", {
+      method: "PUT",
+      body: JSON.stringify(profile),
+    }),
+  addKnowledge: (note: { domain: string; title: string; content: string }) =>
+    request<KnowledgeEntry>("/knowledge", { method: "POST", body: JSON.stringify(note) }),
+  deleteKnowledge: (id: number) =>
+    request<{ deleted: boolean }>(`/knowledge/${id}`, { method: "DELETE" }),
 };

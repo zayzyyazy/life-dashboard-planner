@@ -103,6 +103,27 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL,
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS user_profile (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  name TEXT,
+  summary TEXT,
+  personal_work_context TEXT,
+  university_context TEXT,
+  personal_life_context TEXT,
+  preferences TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS user_knowledge (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  domain TEXT NOT NULL,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'chat',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `;
 
 export const DEFAULT_PROJECTS = [
@@ -111,4 +132,5 @@ export const DEFAULT_PROJECTS = [
   { name: "QA Call Analysis App", description: "Call QA and analysis tooling" },
   { name: "Project Planner", description: "Project planning tools and workflows" },
   { name: "Life Planner Agent", description: "This personal life planner agent" },
+  { name: "University", description: "Courses, assignments, exams, and campus work" },
 ];

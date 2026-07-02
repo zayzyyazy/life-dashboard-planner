@@ -15,6 +15,7 @@ export function getDb(): Database.Database {
     db.pragma("foreign_keys = ON");
     db.exec(SCHEMA_SQL);
     migrateAgentMessages(db);
+    migrateUserTables(db);
     seedDefaults(db);
   }
   return db;
@@ -37,6 +38,34 @@ function migrateAgentMessages(database: Database.Database) {
     if (!names.has(name)) {
       database.exec(`ALTER TABLE agent_messages ADD COLUMN ${name} ${definition}`);
     }
+  }
+}
+
+function migrateUserTables(database: Database.Database) {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS user_profile (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      name TEXT,
+      summary TEXT,
+      personal_work_context TEXT,
+      university_context TEXT,
+      personal_life_context TEXT,
+      preferences TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS user_knowledge (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      domain TEXT NOT NULL,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'chat',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+  const profile = database.prepare("SELECT id FROM user_profile WHERE id = 1").get();
+  if (!profile) {
+    database.prepare("INSERT INTO user_profile (id) VALUES (1)").run();
   }
 }
 
