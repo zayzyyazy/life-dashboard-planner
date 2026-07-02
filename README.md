@@ -53,6 +53,19 @@ npm run dev
 Open **http://localhost:5173** for the dashboard.  
 API runs at **http://localhost:3847**.
 
+### Troubleshooting
+
+**`npm run dev:server exited with code 127`** — server dependencies not installed. Fix:
+
+```bash
+npm run install:all
+npm run dev
+```
+
+**Chat says `OPENAI_API_KEY is not set`** — run `npm run check-env` and add your key to `.env`.
+
+**Server won't start after install** — make sure Node.js 22+ is installed (`node -v`).
+
 ### Production / always-on
 
 ```bash
