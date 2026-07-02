@@ -36,13 +36,22 @@ if [ ! -f "$TSX_BIN" ]; then
   exit 1
 fi
 
-# Warn if project lives on Desktop (LaunchAgents often can't read it)
+# macOS blocks LaunchAgents from Desktop — fail fast with fix
 case "$PROJECT_DIR" in
-  "$HOME/Desktop/"*)
+  "$HOME/Desktop/"*|"*/Desktop/"*)
     echo ""
-    echo "⚠ Project is on Desktop. macOS may block LaunchAgents from reading Desktop."
-    echo "  If the daemon fails, move it: mv \"$PROJECT_DIR\" \"$HOME/life-dashboard-planner\""
+    echo "❌ Cannot install 24/7 daemon while project is on Desktop."
+    echo "   macOS blocks background apps from reading Desktop (Operation not permitted)."
     echo ""
+    echo "Fix — one command:"
+    echo "  bash scripts/migrate-off-desktop.sh"
+    echo ""
+    echo "Or manually:"
+    echo "  launchctl bootout $DOMAIN $PLIST 2>/dev/null || true"
+    echo "  mv \"$PROJECT_DIR\" \"$HOME/life-dashboard-planner\""
+    echo "  cd \"$HOME/life-dashboard-planner\" && npm run install:daemon"
+    echo ""
+    exit 1
     ;;
 esac
 

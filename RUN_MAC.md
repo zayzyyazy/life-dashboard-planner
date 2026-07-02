@@ -6,6 +6,12 @@ git pull origin cursor/life-planner-agent-ab65
 bash scripts/restart-mac.sh
 ```
 
+For **24/7 background** (not dev), project must be off Desktop:
+
+```bash
+npm run migrate:off-desktop
+```
+
 That's it. Leave Terminal open.
 
 ---

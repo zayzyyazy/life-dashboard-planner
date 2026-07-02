@@ -117,6 +117,8 @@ Remind me in 2 minutes to test reminders
 
 ## Run 24/7 on your Mac
 
+> **Project must NOT be on Desktop.** macOS blocks LaunchAgents from Desktop (`Operation not permitted`). Use `~/life-dashboard-planner` instead.
+
 > **Want it running with your Mac off?** See **[DEPLOY_CLOUD.md](./DEPLOY_CLOUD.md)** — deploy to Railway or Fly (~$5/mo).
 
 The agent needs a process running continuously for Telegram, GitHub checks, briefs, and reminders.
@@ -128,11 +130,20 @@ The agent needs a process running continuously for Telegram, GitHub checks, brie
 ### One-time 24/7 install
 
 ```bash
-cd ~/Desktop/life-dashboard-planner
+cd ~/life-dashboard-planner   # NOT Desktop — see migrate step below
 git pull origin cursor/life-planner-agent-ab65
 npm run setup
 npm run install:daemon
 ```
+
+**If your project is still on Desktop**, move it first:
+
+```bash
+cd ~/Desktop/life-dashboard-planner
+npm run migrate:off-desktop
+```
+
+That moves the folder to `~/life-dashboard-planner` and reinstalls the daemon.
 
 This installs a **LaunchAgent** that:
 - Starts automatically when you log in
@@ -219,7 +230,7 @@ npm run dev
 | Chat says no OpenAI key | `nano .env` → add `OPENAI_API_KEY` → restart |
 | No GitHub repos | Add `GITHUB_TOKEN` → `npm run setup` |
 | Telegram silent | Only one instance can poll — stop `npm run dev` before `install:daemon`; check token + user ID |
-| LaunchAgent health check failed | Run `npm run test:daemon` to see the error. If logs are empty, **move project off Desktop**: `mv ~/Desktop/life-dashboard-planner ~/life-dashboard-planner` then re-install |
+| LaunchAgent health check failed | **Desktop blocked?** Run `npm run migrate:off-desktop`. Then `npm run test:daemon` |
 | LaunchAgent "Load failed: 5" | `git pull` then re-run `npm run install:daemon` (uses `launchctl bootstrap`) |
 | GitHub 401 Bad credentials | Regenerate token at GitHub → Settings → Developer settings → add to `.env` as `GITHUB_TOKEN` |
 | Brief not arriving | Say in chat: "Send me a daily brief every morning" OR `npm run setup` |
