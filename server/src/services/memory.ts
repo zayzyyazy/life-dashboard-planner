@@ -6,6 +6,7 @@ import {
   inferDomainFromText,
 } from "./profile.js";
 import { isLifeDomain, type LifeDomain } from "../types/domains.js";
+import { getGitHubContextForBuildContext } from "./github-chat.js";
 
 export type MessageSource = "dashboard" | "telegram" | "api";
 export type MessageType = "text" | "voice" | "command";
@@ -348,8 +349,10 @@ export async function handleClassification(
       if (extracted.repo_url) {
         try {
           const { addWatchedRepo, checkRepo } = await import("./github.js");
+          const { refreshGitHubContext } = await import("./github-context.js");
           const repo = addWatchedRepo(extracted.repo_url, projectId);
           await checkRepo(repo.id);
+          await refreshGitHubContext();
           actions.push("watched_repo");
           return {
             reply: short
@@ -388,6 +391,13 @@ export async function handleClassification(
           : "Share a GitHub repo URL or local folder path to watch.",
         actions,
       };
+    }
+
+    case "github_query": {
+      const { answerGitHubQuestion } = await import("./github-chat.js");
+      const reply = await answerGitHubQuestion(message, { short });
+      actions.push("github_query");
+      return { reply, actions };
     }
 
     case "brief_request": {
@@ -536,6 +546,9 @@ export async function buildContext(): Promise<string> {
       lines.push(`- ${u.name}: ${u.title} — ${preview}`);
     }
   }
+
+  const githubSection = await getGitHubContextForBuildContext();
+  lines.push("", githubSection);
 
   return lines.join("\n");
 }

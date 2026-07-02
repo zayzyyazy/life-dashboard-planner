@@ -39,6 +39,7 @@ export const HELP_MESSAGE = `Examples:
 
 Commands:
 /brief — today's brief
+/github — live GitHub activity across your repos
 /projects — saved projects
 /tasks — open tasks
 /reminders — upcoming reminders
@@ -181,10 +182,19 @@ export function handleProfileCommand(): string {
 export async function handleWatchRepoCommand(url: string): Promise<string> {
   if (!url.trim()) return "Usage: /watchrepo https://github.com/owner/repo";
   try {
+    const { refreshGitHubContext } = await import("../services/github-context.js");
     const repo = addWatchedRepo(url.trim());
     await checkRepo(repo.id);
+    await refreshGitHubContext();
     return `Repo added to watchers: ${repo.owner}/${repo.repo}.`;
   } catch (err) {
     return `Couldn't watch repo: ${err instanceof Error ? err.message : "unknown error"}`;
   }
+}
+
+export async function handleGitHubCommand(): Promise<string> {
+  const { answerGitHubQuestion } = await import("../services/github-chat.js");
+  return answerGitHubQuestion("What's happening across my GitHub repos right now?", {
+    short: true,
+  });
 }

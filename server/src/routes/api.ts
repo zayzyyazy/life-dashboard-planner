@@ -1,7 +1,7 @@
 import { getEnvStatus } from "../config.js";
 import { Router } from "express";
 import { processChat, processCapture } from "../services/chat.js";
-import { addWatchedRepo, checkRepo, listWatchedRepos, syncUserRepos, getGitHubStatus } from "../services/github.js";
+import { addWatchedRepo, checkRepo, listWatchedRepos, getGitHubStatus } from "../services/github.js";
 import { addWatchedFolder, listWatchedFolders } from "../services/folder.js";
 import { getDb } from "../db/index.js";
 
@@ -112,7 +112,8 @@ router.get("/watch/github", (_req, res) => {
 
 router.post("/watch/github/sync", async (_req, res) => {
   try {
-    const result = await syncUserRepos();
+    const { syncAndRefreshGitHub } = await import("../services/github-context.js");
+    const result = await syncAndRefreshGitHub();
     res.json(result);
   } catch (err) {
     console.error(err);
@@ -120,7 +121,9 @@ router.post("/watch/github/sync", async (_req, res) => {
   }
 });
 
-router.get("/github/status", (_req, res) => {
+router.get("/github/status", async (_req, res) => {
+  const { getGitHubConnectionStatus } = await import("../services/github.js");
+  await getGitHubConnectionStatus(true);
   res.json(getGitHubStatus());
 });
 

@@ -1,6 +1,7 @@
 import { config } from "./config.js";
 import { getDb, getSetting, setSetting } from "./db/index.js";
 import { syncUserRepos, getGitHubUser } from "./services/github.js";
+import { bootGitHub } from "./services/github-context.js";
 import { enableReminders } from "./services/reminders.js";
 import { seedProfileIfEmpty } from "./services/profile.js";
 
@@ -48,11 +49,5 @@ export async function runSetup(): Promise<void> {
 }
 
 export async function runBootTasks(): Promise<void> {
-  if (config.github.autoSync && config.github.token) {
-    try {
-      await syncUserRepos({ quiet: true });
-    } catch (err) {
-      console.error("[github] Boot sync failed:", err instanceof Error ? err.message : err);
-    }
-  }
+  await bootGitHub();
 }

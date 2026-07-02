@@ -9,6 +9,7 @@ import {
   handleTasksCommand,
   handleTextMessage,
   handleVoiceTranscript,
+  handleGitHubCommand,
   handleWatchRepoCommand,
   HELP_MESSAGE,
   isAuthorized,
@@ -239,6 +240,9 @@ async function handleCommand(msg: Message) {
       break;
     case "/watchrepo":
       reply = await handleWatchRepoCommand(args);
+      break;
+    case "/github":
+      reply = await handleGitHubCommand();
       break;
     default:
       reply = "Unknown command. Try /help";

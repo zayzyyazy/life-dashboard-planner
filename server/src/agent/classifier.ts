@@ -8,6 +8,7 @@ export type MessageClassification =
   | "general_memory"
   | "profile_memory"
   | "watch_request"
+  | "github_query"
   | "brief_request"
   | "general";
 
@@ -73,6 +74,7 @@ Classify each message into exactly one type:
 - profile_memory: user teaching you about themselves ("remember", "about me", "I study", "I work on", "for university", "know that I")
 - general_memory: other notes to remember (not about the user specifically)
 - watch_request: watch a GitHub repo or local folder
+- github_query: asking about GitHub activity ("what changed in my repos", "commits on X", "open PRs", "github status")
 - brief_request: enable/configure daily brief emails
 - general: casual chat
 

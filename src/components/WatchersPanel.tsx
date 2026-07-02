@@ -21,7 +21,13 @@ interface WatchedFolder {
 export function WatchersPanel() {
   const [repos, setRepos] = useState<WatchedRepo[]>([]);
   const [folders, setFolders] = useState<WatchedFolder[]>([]);
-  const [githubStatus, setGithubStatus] = useState<{ watched_count: number; token_configured: boolean } | null>(null);
+  const [githubStatus, setGithubStatus] = useState<{
+    watched_count: number;
+    token_configured: boolean;
+    auth_valid: boolean | null;
+    login: string | null;
+    last_error: string | null;
+  } | null>(null);
   const [repoUrl, setRepoUrl] = useState("");
   const [folderPath, setFolderPath] = useState("");
   const [loading, setLoading] = useState(true);
@@ -32,7 +38,7 @@ export function WatchersPanel() {
       .then(([r, f, g]) => {
         setRepos(r as WatchedRepo[]);
         setFolders(f as WatchedFolder[]);
-        setGithubStatus(g as { watched_count: number; token_configured: boolean });
+        setGithubStatus(g as typeof githubStatus);
       })
       .finally(() => setLoading(false));
   };
@@ -81,8 +87,15 @@ export function WatchersPanel() {
       <TelegramStatusPanel />
       {githubStatus && (
         <p className="muted">
-          GitHub: {githubStatus.token_configured ? "connected" : "no token"} ·{" "}
-          {githubStatus.watched_count} repo(s) watched
+          GitHub:{" "}
+          {!githubStatus.token_configured
+            ? "no token — add GITHUB_TOKEN to .env"
+            : githubStatus.auth_valid === false
+              ? `auth failed — ${githubStatus.last_error ?? "invalid token"}`
+              : githubStatus.login
+                ? `@${githubStatus.login}`
+                : "checking…"}{" "}
+          · {githubStatus.watched_count} repo(s) watched
           {githubStatus.token_configured && (
             <>
               {" "}
