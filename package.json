@@ -29,6 +29,7 @@
     "test:telegram": "node scripts/test-telegram.mjs",
     "test:github": "node scripts/test-github.mjs",
     "test:reminder": "node scripts/test-reminder.mjs",
+    "fix:telegram": "bash scripts/fix-telegram.sh",
     "typecheck": "tsc && npm run typecheck --prefix server",
     "install:all": "node scripts/check-node.mjs && npm install && npm install --prefix server"
   },
