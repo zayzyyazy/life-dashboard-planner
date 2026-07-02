@@ -23,6 +23,7 @@
     "docker:up": "docker compose up -d --build",
     "docker:logs": "docker compose logs -f",
     "check-env": "node scripts/check-env.mjs",
+    "test:telegram": "node scripts/test-telegram.mjs",
     "typecheck": "tsc && npm run typecheck --prefix server",
     "install:all": "node scripts/check-node.mjs && npm install && npm install --prefix server"
   },

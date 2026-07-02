@@ -82,8 +82,15 @@ export function startTelegramBot(): TelegramBot | null {
 
   bot.on("polling_error", (err) => {
     const message = err instanceof Error ? err.message : String(err);
-    if (message.includes("ETELEGRAM") || message.includes("401")) {
-      console.error("[telegram] Polling error — check TELEGRAM_BOT_TOKEN");
+    if (message.includes("409") || message.includes("Conflict")) {
+      console.error(
+        "[telegram] 409 Conflict — another process is using this bot token."
+      );
+      console.error(
+        "[telegram] Stop other copies: kill port 3847, stop cloud deploy, only run ONE instance."
+      );
+    } else if (message.includes("401") || message.includes("Unauthorized")) {
+      console.error("[telegram] Invalid TELEGRAM_BOT_TOKEN — get a new one from @BotFather");
     } else {
       console.error("[telegram] Polling error:", message);
     }
