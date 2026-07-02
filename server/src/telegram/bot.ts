@@ -25,40 +25,104 @@ import {
 import { registerTelegramNotifier } from "./notify.js";
 
 let bot: TelegramBot | null = null;
+let lastPollingError = "";
+let pollingErrorCount = 0;
 
 export interface TelegramStatus {
   enabled: boolean;
   token_configured: boolean;
+  token_valid: boolean | null;
+  bot_username: string | null;
   allowed_users_configured: boolean;
   voice_enabled: boolean;
   text_enabled: boolean;
   commands_enabled: boolean;
   last_message_at: string | null;
+  last_error: string | null;
 }
+
+let cachedBotUsername: string | null = null;
+let tokenValid: boolean | null = null;
+let lastError: string | null = null;
 
 export function getTelegramStatus(): TelegramStatus {
   const tokenConfigured = Boolean(config.telegram.botToken);
   const allowedConfigured = config.telegram.allowedUserIds.length > 0;
   return {
-    enabled: Boolean(bot) && tokenConfigured && allowedConfigured,
+    enabled: Boolean(bot) && tokenValid === true && allowedConfigured,
     token_configured: tokenConfigured,
+    token_valid: tokenValid,
+    bot_username: cachedBotUsername,
     allowed_users_configured: allowedConfigured,
     voice_enabled: config.telegram.enableVoice,
     text_enabled: config.telegram.enableText,
     commands_enabled: config.telegram.enableCommands,
     last_message_at: getLastTelegramMessageAt(),
+    last_error: lastError,
   };
 }
 
-export function startTelegramBot(): TelegramBot | null {
+function isValidTokenFormat(token: string): boolean {
+  return /^\d+:[A-Za-z0-9_-]+$/.test(token);
+}
+
+export async function validateBotToken(token: string): Promise<{
+  ok: boolean;
+  username?: string;
+  error?: string;
+}> {
+  if (!isValidTokenFormat(token)) {
+    return {
+      ok: false,
+      error: "Token format invalid. Should look like: 123456789:ABCdefGHI... (no spaces or quotes)",
+    };
+  }
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+    const data = (await res.json()) as {
+      ok: boolean;
+      description?: string;
+      result?: { username: string };
+    };
+    if (!data.ok) {
+      return { ok: false, error: data.description ?? "Invalid token" };
+    }
+    return { ok: true, username: data.result?.username };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Network error" };
+  }
+}
+
+function parsePollingError(err: unknown): { code: string; message: string } {
+  const raw = err instanceof Error ? err.message : String(err);
+  const body = (err as { response?: { body?: { error_code?: number; description?: string } } })
+    ?.response?.body;
+  const code = body?.error_code ? String(body.error_code) : "";
+  const desc = body?.description ?? raw;
+  return { code, message: desc };
+}
+
+export async function startTelegramBot(): Promise<TelegramBot | null> {
   if (!config.telegram.botToken) {
     console.log("[telegram] TELEGRAM_BOT_TOKEN not set — Telegram disabled");
     return null;
   }
 
+  const validation = await validateBotToken(config.telegram.botToken);
+  tokenValid = validation.ok;
+  if (!validation.ok) {
+    lastError = validation.error ?? "Invalid token";
+    console.error(`[telegram] ❌ ${lastError}`);
+    console.error("[telegram] Fix: open @BotFather → /mybots → your bot → API Token → copy fresh token to .env");
+    return null;
+  }
+
+  cachedBotUsername = validation.username ?? null;
+  console.log(`[telegram] ✓ Token valid — bot @${cachedBotUsername}`);
+
   if (config.telegram.allowedUserIds.length === 0) {
     console.warn(
-      "[telegram] TELEGRAM_ALLOWED_USER_IDS not set — bot will log incoming user IDs but reject messages"
+      "[telegram] TELEGRAM_ALLOWED_USER_IDS not set — messages will be rejected until you add your ID"
     );
   }
 
@@ -81,18 +145,25 @@ export function startTelegramBot(): TelegramBot | null {
   });
 
   bot.on("polling_error", (err) => {
-    const message = err instanceof Error ? err.message : String(err);
-    if (message.includes("409") || message.includes("Conflict")) {
-      console.error(
-        "[telegram] 409 Conflict — another process is using this bot token."
-      );
-      console.error(
-        "[telegram] Stop other copies: kill port 3847, stop cloud deploy, only run ONE instance."
-      );
-    } else if (message.includes("401") || message.includes("Unauthorized")) {
-      console.error("[telegram] Invalid TELEGRAM_BOT_TOKEN — get a new one from @BotFather");
-    } else {
-      console.error("[telegram] Polling error:", message);
+    const { code, message } = parsePollingError(err);
+    pollingErrorCount++;
+
+    // Log once per error type, then every 30th repeat
+    if (message !== lastPollingError || pollingErrorCount % 30 === 1) {
+      lastPollingError = message;
+      lastError = message;
+
+      if (code === "409" || message.includes("Conflict")) {
+        console.error("[telegram] ❌ 409 Conflict — TWO processes using this bot token.");
+        console.error("[telegram]    Fix: lsof -ti :3847 | xargs kill -9");
+        console.error("[telegram]    Then run ONLY ONE: bash scripts/restart-mac.sh");
+        bot?.stopPolling();
+      } else if (code === "401" || message.includes("Unauthorized")) {
+        console.error("[telegram] ❌ Invalid token. Get new token from @BotFather → paste in .env → restart");
+        bot?.stopPolling();
+      } else {
+        console.error(`[telegram] Polling error (${code || "?"}): ${message}`);
+      }
     }
   });
 

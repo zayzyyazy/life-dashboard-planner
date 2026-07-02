@@ -37,6 +37,14 @@ if (!token) {
   process.exit(1);
 }
 
+if (!/^\d+:[A-Za-z0-9_-]+$/.test(token)) {
+  console.error("❌ TELEGRAM_BOT_TOKEN format looks wrong.");
+  console.error("   Should be: 123456789:ABCdefGHIjkl...");
+  console.error("   No spaces, no quotes, nothing before/after the token on the line.");
+  console.error(`   Your token starts with: ${token.slice(0, 15)}...`);
+  process.exit(1);
+}
+
 console.log("1. Testing bot token with Telegram API...");
 const meRes = await fetch(`https://api.telegram.org/bot${token}/getMe`);
 const me = await meRes.json();

@@ -100,6 +100,6 @@ app.listen(config.port, host, () => {
     console.warn("WARNING: OPENAI_API_KEY not set — chat will fail until configured");
   }
   startScheduler();
-  startTelegramBot();
+  startTelegramBot().catch((err) => console.error("[telegram] Failed to start:", err));
   runBootTasks().catch(console.error);
 });
