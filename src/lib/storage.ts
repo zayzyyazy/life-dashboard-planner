@@ -9,7 +9,9 @@ import {
 } from "./templates";
 import { startOfWeek, toDateString } from "./dateUtils";
 import type { CourseDashboardCourse } from "../types/template";
+import type { Project } from "../types/project";
 import { inferKindFromTask } from "./taskUtils";
+import { migrateTaskBucket } from "./bucketUtils";
 import type { Task } from "../types/task";
 import type { BoxKind } from "../types/box";
 
@@ -21,6 +23,7 @@ const KEYS = {
   weekTemplates: "ldp_week_templates",
   templateVersion: "ldp_template_version",
   courses: "ldp_courses",
+  projects: "ldp_projects",
   viewWeekStart: "ldp_view_week_start",
   hiddenBuiltinBoxes: "ldp_hidden_builtin_boxes",
 } as const;
@@ -51,6 +54,8 @@ function sanitizeTask(t: Partial<Task>): Task | null {
     tag: t.tag ?? "personal",
     priority: t.priority ?? "medium",
     kind: inferKindFromTask(t as Task),
+    bucket: migrateTaskBucket(t),
+    projectId: t.projectId,
     estimatedHours: t.estimatedHours,
     startTime: t.startTime,
     endTime: t.endTime,
@@ -140,6 +145,14 @@ export function loadHiddenBuiltinBoxes(): BoxKind[] {
 
 export function saveHiddenBuiltinBoxes(kinds: BoxKind[]): void {
   write(KEYS.hiddenBuiltinBoxes, kinds);
+}
+
+export function loadProjects(): Project[] {
+  return read<Project[]>(KEYS.projects, []);
+}
+
+export function saveProjects(projects: Project[]): void {
+  write(KEYS.projects, projects);
 }
 
 export function loadCourses(): CourseDashboardCourse[] {

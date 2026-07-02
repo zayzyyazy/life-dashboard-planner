@@ -1,10 +1,18 @@
 import { MiniModeView } from "../MiniModeView";
 import { Header } from "./Header";
-import { Sidebar } from "./Sidebar";
-import { TodayPage } from "../../pages/TodayPage";
+import { MobileNav, Sidebar } from "./Sidebar";
+import { AiPlannerPage } from "../../pages/AiPlannerPage";
+import { DashboardPage } from "../../pages/DashboardPage";
 import { WeekCalendarPage } from "../../pages/WeekCalendarPage";
 import { SettingsPage } from "../../pages/SettingsPage";
 import { useApp } from "../../store/AppContext";
+
+const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
+  dashboard: { title: "Dashboard", subtitle: "Your command center" },
+  planner: { title: "Chat Planner", subtitle: "Talk it out — I'll organize your plan" },
+  week: { title: "Schedule", subtitle: "Week calendar view" },
+  settings: { title: "Settings", subtitle: "Preferences & integrations" },
+};
 
 export function AppShell() {
   const { page, isMiniMode } = useApp();
@@ -17,16 +25,20 @@ export function AppShell() {
     );
   }
 
+  const pageMeta = PAGE_TITLES[page] ?? PAGE_TITLES.dashboard;
+
   return (
     <div className="app-shell">
       <Sidebar />
       <div className="main-area">
-        <Header />
+        <Header title={pageMeta.title} subtitle={pageMeta.subtitle} />
         <main className="page-content">
-          {page === "today" && <TodayPage />}
+          {page === "dashboard" && <DashboardPage />}
+          {page === "planner" && <AiPlannerPage />}
           {page === "week" && <WeekCalendarPage />}
           {page === "settings" && <SettingsPage />}
         </main>
+        <MobileNav />
       </div>
     </div>
   );
