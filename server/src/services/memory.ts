@@ -4,7 +4,6 @@ import {
   addKnowledge,
   domainLabel,
   inferDomainFromText,
-  formatPersonalContextForPrompt,
 } from "./profile.js";
 import { isLifeDomain, type LifeDomain } from "../types/domains.js";
 
@@ -78,6 +77,94 @@ export function getLastUserActivityAt(): string | null {
     )
     .get() as { created_at: string } | undefined;
   return row?.created_at ?? null;
+}
+
+export interface ConversationTurn {
+  role: string;
+  content: string;
+}
+
+/** Recent chat turns in chronological order (for LLM context). */
+export function getRecentConversation(
+  limit = 16,
+  options: { excludeLatest?: boolean } = {}
+): ConversationTurn[] {
+  const fetchLimit = options.excludeLatest ? limit + 1 : limit;
+  const rows = getDb()
+    .prepare(
+      `SELECT role, content FROM agent_messages
+       ORDER BY created_at DESC LIMIT ?`
+    )
+    .all(fetchLimit) as ConversationTurn[];
+  const ordered = rows.reverse();
+  if (options.excludeLatest && ordered.length > 0) {
+    ordered.pop();
+  }
+  return ordered.slice(-limit);
+}
+
+export function formatConversationForClassifier(turns: ConversationTurn[]): string {
+  if (turns.length === 0) return "(no prior messages)";
+  return turns.map((t) => `${t.role}: ${t.content}`).join("\n");
+}
+
+export function findTaskId(title: string | null): number | null {
+  if (!title?.trim()) return null;
+  const db = getDb();
+  const tasks = db
+    .prepare(
+      `SELECT id, title FROM tasks WHERE status IN ('open', 'blocked') ORDER BY updated_at DESC`
+    )
+    .all() as { id: number; title: string }[];
+  const lower = title.toLowerCase().trim();
+  const exact = tasks.find((t) => t.title.toLowerCase() === lower);
+  if (exact) return exact.id;
+  const partial = tasks.find(
+    (t) =>
+      t.title.toLowerCase().includes(lower) || lower.includes(t.title.toLowerCase())
+  );
+  return partial?.id ?? null;
+}
+
+export function completeTaskByMatch(
+  title: string
+): { id: number; title: string } | null {
+  const id = findTaskId(title);
+  if (!id) return null;
+  const db = getDb();
+  const task = db.prepare("SELECT id, title FROM tasks WHERE id = ?").get(id) as
+    | { id: number; title: string }
+    | undefined;
+  if (!task) return null;
+  db.prepare(
+    `UPDATE tasks SET status = 'done', updated_at = datetime('now') WHERE id = ?`
+  ).run(id);
+  return task;
+}
+
+export function listOpenTasksForClassifier(): string {
+  const tasks = getDb()
+    .prepare(
+      `SELECT t.title, t.status, t.due_date, p.name as project
+       FROM tasks t LEFT JOIN projects p ON p.id = t.project_id
+       WHERE t.status IN ('open', 'blocked')
+       ORDER BY t.due_date LIMIT 20`
+    )
+    .all() as {
+    title: string;
+    status: string;
+    due_date: string | null;
+    project: string | null;
+  }[];
+  if (tasks.length === 0) return "(none)";
+  return tasks
+    .map((t) => {
+      const due = t.due_date ? ` due ${t.due_date.slice(0, 10)}` : "";
+      const proj = t.project ? ` [${t.project}]` : "";
+      const blocked = t.status === "blocked" ? " (blocked)" : "";
+      return `- ${t.title}${proj}${due}${blocked}`;
+    })
+    .join("\n");
 }
 
 export function findProjectId(name: string | null): number | null {
@@ -195,8 +282,37 @@ export async function handleClassification(
           ? ` Blocked: ${extracted.blocked_reason}.`
           : ` [blocked: ${extracted.blocked_reason}]`
         : "";
+      const remindNote =
+        extracted.due_at && short
+          ? " I'll remind you when it's due."
+          : extracted.due_at
+            ? " I'll ping you when it's due."
+            : "";
       return {
-        reply: short ? `Task saved.${due}${blocked}` : `Task created${due}${blocked}.`,
+        reply: short
+          ? `Task saved.${due}${blocked}${remindNote}`
+          : `Task created${due}${blocked}.${remindNote}`,
+        actions,
+      };
+    }
+
+    case "task_complete": {
+      const matchTitle = extracted.title ?? extracted.content ?? message;
+      const completed = completeTaskByMatch(matchTitle);
+      if (!completed) {
+        const open = listOpenTasksForClassifier();
+        return {
+          reply: short
+            ? `Couldn't find that task. Open:\n${open}`
+            : `Couldn't find an open task matching "${matchTitle}". Open tasks:\n${open}`,
+          actions,
+        };
+      }
+      actions.push("completed_task");
+      return {
+        reply: short
+          ? `Marked done: ${completed.title}.`
+          : `Marked complete: ${completed.title}`,
         actions,
       };
     }
@@ -328,31 +444,100 @@ export async function handleClassification(
 
 export async function buildContext(): Promise<string> {
   const db = getDb();
+  const today = new Date().toISOString().slice(0, 10);
+
   const projects = db
-    .prepare("SELECT name, status FROM projects WHERE status = 'active' LIMIT 10")
-    .all() as { name: string; status: string }[];
-  const openTasks = db
-    .prepare("SELECT COUNT(*) as c FROM tasks WHERE status IN ('open', 'blocked')")
-    .get() as { c: number };
-  const dueReminders = db
     .prepare(
-      "SELECT COUNT(*) as c FROM reminders WHERE status = 'pending' AND date(due_at) <= date('now')"
+      `SELECT name, status, updated_at FROM projects WHERE status = 'active' ORDER BY updated_at DESC LIMIT 12`
     )
-    .get() as { c: number };
-  const todayUpdates = db
+    .all() as { name: string; status: string; updated_at: string }[];
+
+  const tasks = db
     .prepare(
-      `SELECT COUNT(*) as c FROM project_updates WHERE date(created_at) = date('now')`
+      `SELECT t.title, t.status, t.due_date, t.blocked_reason, p.name as project
+       FROM tasks t LEFT JOIN projects p ON p.id = t.project_id
+       WHERE t.status IN ('open', 'blocked')
+       ORDER BY CASE t.status WHEN 'blocked' THEN 0 ELSE 1 END,
+                CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END, t.due_date
+       LIMIT 15`
+    )
+    .all() as {
+    title: string;
+    status: string;
+    due_date: string | null;
+    blocked_reason: string | null;
+    project: string | null;
+  }[];
+
+  const reminders = db
+    .prepare(
+      `SELECT message, due_at FROM reminders
+       WHERE status = 'pending' AND datetime(due_at) >= datetime('now')
+       ORDER BY due_at LIMIT 10`
+    )
+    .all() as { message: string; due_at: string }[];
+
+  const overdueReminders = db
+    .prepare(
+      `SELECT COUNT(*) as c FROM reminders
+       WHERE status = 'pending' AND datetime(due_at) < datetime('now')`
     )
     .get() as { c: number };
 
-  return [
-    formatPersonalContextForPrompt(),
-    "",
-    `Active projects: ${projects.map((p) => p.name).join(", ")}`,
-    `Open tasks: ${openTasks.c}`,
-    `Reminders due today or overdue: ${dueReminders.c}`,
-    `Project updates today: ${todayUpdates.c}`,
-  ].join("\n");
+  const updates = db
+    .prepare(
+      `SELECT p.name, pu.title, pu.content, pu.created_at
+       FROM project_updates pu
+       JOIN projects p ON p.id = pu.project_id
+       WHERE date(pu.created_at) >= date('now', '-3 days')
+       ORDER BY pu.created_at DESC LIMIT 12`
+    )
+    .all() as { name: string; title: string; content: string; created_at: string }[];
+
+  const lines: string[] = [`Today: ${today}`, ""];
+
+  lines.push("### Active projects");
+  if (projects.length === 0) {
+    lines.push("(none)");
+  } else {
+    for (const p of projects) {
+      lines.push(`- ${p.name} (updated ${p.updated_at.slice(0, 10)})`);
+    }
+  }
+
+  lines.push("", "### Open tasks");
+  if (tasks.length === 0) {
+    lines.push("(none)");
+  } else {
+    for (const t of tasks) {
+      const due = t.due_date ? ` · due ${t.due_date.slice(0, 10)}` : "";
+      const proj = t.project ? ` · ${t.project}` : "";
+      const blocked = t.blocked_reason ? ` · BLOCKED: ${t.blocked_reason}` : "";
+      lines.push(`- [${t.status}] ${t.title}${proj}${due}${blocked}`);
+    }
+  }
+
+  lines.push("", "### Upcoming reminders");
+  if (reminders.length === 0) {
+    lines.push(overdueReminders.c > 0 ? `(none upcoming; ${overdueReminders.c} overdue)` : "(none)");
+  } else {
+    for (const r of reminders) {
+      lines.push(`- ${r.message} · ${r.due_at.slice(0, 16).replace("T", " ")}`);
+    }
+  }
+
+  lines.push("", "### Recent project updates (last 3 days)");
+  if (updates.length === 0) {
+    lines.push("(none)");
+  } else {
+    for (const u of updates) {
+      const preview =
+        u.content.length > 120 ? u.content.slice(0, 117) + "…" : u.content;
+      lines.push(`- ${u.name}: ${u.title} — ${preview}`);
+    }
+  }
+
+  return lines.join("\n");
 }
 
 function resolveLifeDomain(result: ClassificationResult, message: string): LifeDomain {

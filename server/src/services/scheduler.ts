@@ -5,7 +5,7 @@ import { generateDailyBrief, markBriefSent } from "./brief.js";
 import { sendEmail } from "./email.js";
 import { checkAllRepos } from "./github.js";
 import { checkAllFolders, startFolderWatcher } from "./folder.js";
-import { processDueReminders } from "./reminders.js";
+import { processDueReminders, processDueTasks } from "./reminders.js";
 import { processIdleNudge } from "./idle-nudge.js";
 import { notifyTelegramUsers } from "../telegram/notify.js";
 
@@ -22,9 +22,10 @@ export function startScheduler() {
     checkAllFolders().catch(console.error);
   });
 
-  // Reminders: check every 5 minutes
+  // Reminders + due tasks: check every 5 minutes
   cron.schedule(config.reminders.checkCron, () => {
     processDueReminders().catch(console.error);
+    processDueTasks().catch(console.error);
   });
 
   // Idle check-in: nudge on Telegram after no updates for a while (Mac must be running)

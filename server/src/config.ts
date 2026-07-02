@@ -91,6 +91,10 @@ export const config = {
     cooldownHours: Number(process.env.IDLE_NUDGE_COOLDOWN_HOURS ?? 4),
     checkCron: process.env.IDLE_NUDGE_CHECK_CRON ?? "*/15 * * * *",
   },
+  chat: {
+    historyLimit: Number(process.env.CHAT_HISTORY_LIMIT ?? 16),
+    classifierHistoryLimit: Number(process.env.CLASSIFIER_HISTORY_LIMIT ?? 6),
+  },
   security: {
     allowShell: process.env.ALLOW_SHELL === "true",
   },

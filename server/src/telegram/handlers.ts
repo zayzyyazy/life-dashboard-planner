@@ -30,15 +30,12 @@ export const START_MESSAGE =
   "I'm your Life Planner Agent — programmed for you, not a generic bot. Send text or voice notes. I separate personal work, university, and life.";
 
 export const HELP_MESSAGE = `Examples:
-• Remember about me: I study computer science at X university
+• What should I focus on today?
+• Mark Marie API task done / finished the CRM integration
 • For university: algorithms assignment due Friday
-• For personal work: Marie birthday path still needs testing
 • Add this to Marie: Marc fixed the phone path
 • Remind me tomorrow to ask Chris about CRM endpoints
-
-Teach me about you:
-• "Remember: my personal work is Leaping AI and MCP"
-• "For university: I'm taking distributed systems this semester"
+• Task: deploy MCP server by Thursday
 
 Commands:
 /brief — today's brief
@@ -94,6 +91,7 @@ export async function handleVoiceTranscript(
 }
 
 function describeSavedAs(classification: ClassificationResult, actions: string[]): string {
+  if (actions.includes("completed_task")) return "task completed";
   if (actions.includes("saved_project_update")) return "project update";
   if (actions.includes("created_task")) return "task";
   if (actions.includes("created_reminder")) return "reminder";

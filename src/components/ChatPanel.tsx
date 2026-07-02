@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 
 export function ChatPanel() {
@@ -6,6 +6,15 @@ export function ChatPanel() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .getMessages()
+      .then((rows) =>
+        setMessages(rows.map((m) => ({ role: m.role, content: m.content })))
+      )
+      .catch(() => {});
+  }, []);
 
   const send = async () => {
     if (!input.trim() || loading) return;
@@ -28,8 +37,8 @@ export function ChatPanel() {
     <section className="panel chat-panel">
       <h2>Chat</h2>
       <p className="hint">
-        Try: &quot;Remember about me: I study CS and run Leaping AI&quot;, &quot;For university: exam Friday&quot;,
-        &quot;Add this to Marie project&quot;, &quot;Remind me tomorrow…&quot;
+        Try: &quot;What should I focus on today?&quot;, &quot;Mark Marie API task done&quot;,
+        &quot;For university: exam Friday&quot;, &quot;Remind me tomorrow…&quot;
       </p>
       <div className="chat-messages">
         {messages.length === 0 && (

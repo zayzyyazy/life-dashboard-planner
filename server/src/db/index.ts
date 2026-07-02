@@ -17,6 +17,7 @@ export function getDb(): Database.Database {
     migrateAgentMessages(db);
     migrateUserTables(db);
     migrateReminders(db);
+    migrateTasks(db);
     seedDefaults(db);
   }
   return db;
@@ -76,6 +77,13 @@ function migrateReminders(database: Database.Database) {
     .all() as { name: string }[];
   if (!cols.some((c) => c.name === "notified_at")) {
     database.exec("ALTER TABLE reminders ADD COLUMN notified_at TEXT");
+  }
+}
+
+function migrateTasks(database: Database.Database) {
+  const cols = database.prepare("PRAGMA table_info(tasks)").all() as { name: string }[];
+  if (!cols.some((c) => c.name === "notified_at")) {
+    database.exec("ALTER TABLE tasks ADD COLUMN notified_at TEXT");
   }
 }
 
