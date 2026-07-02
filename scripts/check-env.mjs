@@ -60,23 +60,31 @@ const checks = [
   ["OPENAI_API_KEY", vars.OPENAI_API_KEY],
   ["TELEGRAM_BOT_TOKEN", vars.TELEGRAM_BOT_TOKEN],
   ["TELEGRAM_ALLOWED_USER_IDS", vars.TELEGRAM_ALLOWED_USER_IDS],
+  ["GITHUB_TOKEN", vars.GITHUB_TOKEN],
+  ["EMAIL_TO", vars.EMAIL_TO],
 ];
 
 let ok = true;
+let warnings = 0;
 for (const [name, value] of checks) {
-  const set = Boolean(value?.trim());
+  const set = Boolean(value?.trim() && !value.includes("your-") && !value.includes("ghp_your"));
   const preview = set ? `${String(value).slice(0, 8)}…` : "NOT SET";
-  console.log(`${set ? "✓" : "❌"} ${name}: ${preview}`);
-  if (name === "OPENAI_API_KEY" && !set) ok = false;
+  const required = name === "OPENAI_API_KEY";
+  if (required && !set) ok = false;
+  if (!required && !set) warnings++;
+  console.log(`${set ? "✓" : required ? "❌" : "⚠"} ${name}: ${preview}`);
 }
 
 console.log("");
 if (!ok) {
-  console.log("❌ OPENAI_API_KEY is required for chat.");
-  console.log("\nFix — edit your .env and add a line like:");
-  console.log("  OPENAI_API_KEY=sk-your-real-key-here");
-  console.log(`\n  nano ${found}`);
+  console.log("❌ OPENAI_API_KEY is required.");
+  console.log(`  nano ${found}`);
   process.exit(1);
 }
 
-console.log("✓ .env looks good. Run: npm run dev");
+if (warnings > 0) {
+  console.log("⚠ Some optional keys missing — GitHub sync, email briefs, or Telegram may not work.");
+  console.log("  Edit .env then run: npm run setup");
+}
+
+console.log("✓ Ready. Run: npm run setup   then   npm run dev");

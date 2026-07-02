@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS reminders (
   message TEXT NOT NULL,
   due_at TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
+  notified_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
 );

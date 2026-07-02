@@ -1,10 +1,18 @@
 import { config } from "../config.js";
 import { getDb } from "../db/index.js";
 import { chatCompletion } from "./openai.js";
+import { findProjectId } from "./memory.js";
 
 export interface RepoRef {
   owner: string;
   repo: string;
+}
+
+export interface GitHubRepo {
+  full_name: string;
+  html_url: string;
+  pushed_at: string;
+  private: boolean;
 }
 
 export function parseRepoUrl(url: string): RepoRef {
@@ -16,23 +24,7 @@ export function parseRepoUrl(url: string): RepoRef {
   return { owner: match[1], repo: match[2] };
 }
 
-export function addWatchedRepo(
-  url: string,
-  projectId?: number | null
-): { id: number; owner: string; repo: string } {
-  const { owner, repo } = parseRepoUrl(url);
-  const db = getDb();
-  const result = db
-    .prepare(
-      `INSERT INTO watched_repos (project_id, owner, repo, url) VALUES (?, ?, ?, ?)
-       ON CONFLICT(owner, repo) DO UPDATE SET project_id = COALESCE(excluded.project_id, project_id)
-       RETURNING id, owner, repo`
-    )
-    .get(projectId ?? null, owner, repo, url) as { id: number; owner: string; repo: string };
-  return result;
-}
-
-async function githubFetch(path: string) {
+export async function githubFetch(path: string) {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "User-Agent": "life-planner-agent",
@@ -48,6 +40,110 @@ async function githubFetch(path: string) {
   return res.json();
 }
 
+export function mapRepoToProjectName(owner: string, repo: string): string | null {
+  const hay = `${owner}/${repo}`.toLowerCase();
+  if (/marie|leaping/.test(hay)) return "Marie / Leaping AI";
+  if (/mcp/.test(hay)) return "MCP Server";
+  if (/qa|call/.test(hay)) return "QA Call Analysis App";
+  if (/life-dashboard|life-planner/.test(hay)) return "Life Planner Agent";
+  if (/planner/.test(hay)) return "Project Planner";
+  if (/uni|course|lecture|assignment|school/.test(hay)) return "University";
+  return null;
+}
+
+export function addWatchedRepo(
+  url: string,
+  projectId?: number | null
+): { id: number; owner: string; repo: string } {
+  const { owner, repo } = parseRepoUrl(url);
+  const db = getDb();
+  const resolvedProjectId =
+    projectId ?? findProjectId(mapRepoToProjectName(owner, repo));
+  const result = db
+    .prepare(
+      `INSERT INTO watched_repos (project_id, owner, repo, url) VALUES (?, ?, ?, ?)
+       ON CONFLICT(owner, repo) DO UPDATE SET
+         project_id = COALESCE(excluded.project_id, watched_repos.project_id),
+         url = excluded.url
+       RETURNING id, owner, repo`
+    )
+    .get(resolvedProjectId ?? null, owner, repo, url) as {
+    id: number;
+    owner: string;
+    repo: string;
+  };
+  return result;
+}
+
+export async function getGitHubUser(): Promise<{ login: string } | null> {
+  if (!config.github.token) return null;
+  try {
+    return (await githubFetch("/user")) as { login: string };
+  } catch {
+    return null;
+  }
+}
+
+export async function listUserRepos(): Promise<GitHubRepo[]> {
+  if (!config.github.token) {
+    throw new Error("GITHUB_TOKEN is required to list your repos");
+  }
+  const username = config.github.username;
+  const path = username
+    ? `/users/${username}/repos?sort=pushed&per_page=${config.github.syncLimit}`
+    : `/user/repos?affiliation=owner&sort=pushed&per_page=${config.github.syncLimit}`;
+  return (await githubFetch(path)) as GitHubRepo[];
+}
+
+export async function syncUserRepos(options: { quiet?: boolean } = {}): Promise<{
+  added: string[];
+  total: number;
+}> {
+  const added: string[] = [];
+
+  if (config.github.watchRepos.length > 0) {
+    for (const spec of config.github.watchRepos) {
+      const url = spec.includes("github.com")
+        ? spec
+        : `https://github.com/${spec.replace(/^\//, "")}`;
+      const repo = addWatchedRepo(url);
+      added.push(`${repo.owner}/${repo.repo}`);
+    }
+  } else if (config.github.token) {
+    const repos = await listUserRepos();
+    for (const r of repos) {
+      const [owner, repo] = r.full_name.split("/");
+      const entry = addWatchedRepo(r.html_url);
+      added.push(`${entry.owner}/${entry.repo}`);
+      if (!options.quiet) {
+        console.log(`[github] Watching ${owner}/${repo} (pushed ${r.pushed_at})`);
+      }
+    }
+  } else {
+    throw new Error("Set GITHUB_TOKEN or GITHUB_WATCH_REPOS to sync repos");
+  }
+
+  if (!options.quiet) {
+    console.log(`[github] Synced ${added.length} repo(s)`);
+  }
+
+  await checkAllRepos();
+
+  return { added, total: added.length };
+}
+
+export function getGitHubStatus() {
+  const repos = listWatchedRepos();
+  return {
+    token_configured: Boolean(config.github.token),
+    auto_sync: config.github.autoSync,
+    username: config.github.username || null,
+    watch_list: config.github.watchRepos,
+    watched_count: repos.length,
+    repos,
+  };
+}
+
 export async function checkRepo(repoId: number): Promise<string | null> {
   const db = getDb();
   const row = db
@@ -61,6 +157,9 @@ export async function checkRepo(repoId: number): Promise<string | null> {
   } | undefined;
 
   if (!row) return null;
+
+  const projectId =
+    row.project_id ?? findProjectId(mapRepoToProjectName(row.owner, row.repo));
 
   const [commits, issues, prs] = await Promise.all([
     githubFetch(`/repos/${row.owner}/${row.repo}/commits?per_page=5`) as Promise<
@@ -111,18 +210,26 @@ export async function checkRepo(repoId: number): Promise<string | null> {
     { tier: "default" }
   );
 
-  if (row.project_id) {
+  if (projectId) {
     db.prepare(
       "INSERT INTO project_updates (project_id, source, title, content, metadata) VALUES (?, ?, ?, ?, ?)"
     ).run(
-      row.project_id,
+      projectId,
       "github",
       `GitHub: ${row.owner}/${row.repo}`,
       summary,
       JSON.stringify({ latest_sha: latestSha })
     );
-    db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(
-      row.project_id
+    db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(projectId);
+  } else {
+    db.prepare(
+      `INSERT INTO project_updates (project_id, source, title, content, metadata)
+       SELECT p.id, 'github', ?, ?, ?
+       FROM projects p WHERE p.name = 'Life Planner Agent' LIMIT 1`
+    ).run(
+      `GitHub: ${row.owner}/${row.repo}`,
+      summary,
+      JSON.stringify({ latest_sha: latestSha, unmapped: true })
     );
   }
 

@@ -116,6 +116,10 @@ export const api = {
 
   getWatchedRepos: () => request<unknown[]>("/watch/github"),
   getWatchedFolders: () => request<unknown[]>("/watch/folder"),
+  getGitHubStatus: () =>
+    request<{ watched_count: number; token_configured: boolean }>("/github/status"),
+  syncGitHubRepos: () =>
+    request<{ added: string[]; total: number }>("/watch/github/sync", { method: "POST" }),
   getTelegramStatus: () => request<TelegramStatus>("/telegram/status"),
 
   getProfile: () =>

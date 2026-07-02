@@ -5,18 +5,25 @@ import { generateDailyBrief, markBriefSent } from "./brief.js";
 import { sendEmail } from "./email.js";
 import { checkAllRepos } from "./github.js";
 import { checkAllFolders, startFolderWatcher } from "./folder.js";
+import { processDueReminders } from "./reminders.js";
+import { notifyTelegramUsers } from "../telegram/notify.js";
 
 export function startScheduler() {
   startFolderWatcher();
 
-  // Check repos every 30 minutes
+  // GitHub: check every 30 minutes
   cron.schedule("*/30 * * * *", () => {
     checkAllRepos().catch(console.error);
   });
 
-  // Check folders every 15 minutes (backup to chokidar)
+  // Folders: backup scan every 15 minutes
   cron.schedule("*/15 * * * *", () => {
     checkAllFolders().catch(console.error);
+  });
+
+  // Reminders: check every 5 minutes
+  cron.schedule(config.reminders.checkCron, () => {
+    processDueReminders().catch(console.error);
   });
 
   // Daily brief
@@ -27,19 +34,26 @@ export function startScheduler() {
       if (enabled !== "true") return;
       try {
         const brief = await generateDailyBrief();
-        await sendEmail({
-          subject: `Daily Brief — ${new Date().toLocaleDateString()}`,
-          text: brief,
-          html: brief.replace(/\n/g, "<br>"),
-        });
+        const subject = `Daily Brief — ${new Date().toLocaleDateString()}`;
+        if (config.email.to) {
+          await sendEmail({
+            subject,
+            text: brief,
+            html: brief.replace(/\n/g, "<br>"),
+          });
+        }
+        const preview = brief.length > 3500 ? brief.slice(0, 3497) + "…" : brief;
+        await notifyTelegramUsers(`📋 ${subject}\n\n${preview}`);
         markBriefSent();
-        console.log("Daily brief sent");
+        console.log("[brief] Daily brief sent");
       } catch (err) {
-        console.error("Daily brief failed:", err);
+        console.error("[brief] Daily brief failed:", err);
       }
     },
     { timezone: config.brief.timezone }
   );
 
-  console.log(`Scheduler started (brief cron: ${config.brief.cron}, tz: ${config.brief.timezone})`);
+  console.log(
+    `[scheduler] brief=${config.brief.cron} reminders=${config.reminders.checkCron} github=every30m`
+  );
 }

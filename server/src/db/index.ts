@@ -16,6 +16,7 @@ export function getDb(): Database.Database {
     db.exec(SCHEMA_SQL);
     migrateAgentMessages(db);
     migrateUserTables(db);
+    migrateReminders(db);
     seedDefaults(db);
   }
   return db;
@@ -66,6 +67,15 @@ function migrateUserTables(database: Database.Database) {
   const profile = database.prepare("SELECT id FROM user_profile WHERE id = 1").get();
   if (!profile) {
     database.prepare("INSERT INTO user_profile (id) VALUES (1)").run();
+  }
+}
+
+function migrateReminders(database: Database.Database) {
+  const cols = database
+    .prepare("PRAGMA table_info(reminders)")
+    .all() as { name: string }[];
+  if (!cols.some((c) => c.name === "notified_at")) {
+    database.exec("ALTER TABLE reminders ADD COLUMN notified_at TEXT");
   }
 }
 

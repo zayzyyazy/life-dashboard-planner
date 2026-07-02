@@ -22,6 +22,7 @@ import {
   shortTranscriptPreview,
   transcribeVoiceFile,
 } from "./voice.js";
+import { registerTelegramNotifier } from "./notify.js";
 
 let bot: TelegramBot | null = null;
 
@@ -63,6 +64,10 @@ export function startTelegramBot(): TelegramBot | null {
 
   bot = new TelegramBot(config.telegram.botToken, { polling: true });
   console.log("[telegram] Bot started (polling)");
+
+  registerTelegramNotifier(async (chatId, text) => {
+    await bot!.sendMessage(chatId, text);
+  });
 
   bot.on("message", async (msg) => {
     try {

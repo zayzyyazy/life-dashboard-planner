@@ -1,6 +1,8 @@
 import { Router } from "express";
+import { config } from "../config.js";
 import { generateDailyBrief, getTodayBrief, markBriefSent } from "../services/brief.js";
 import { sendEmail } from "../services/email.js";
+import { notifyTelegramUsers } from "../telegram/notify.js";
 
 export const briefRouter = Router();
 
@@ -20,11 +22,16 @@ briefRouter.get("/today", async (_req, res) => {
 briefRouter.post("/send-daily", async (_req, res) => {
   try {
     const content = await generateDailyBrief();
-    await sendEmail({
-      subject: `Daily Brief — ${new Date().toLocaleDateString()}`,
-      text: content,
-      html: content.replace(/\n/g, "<br>"),
-    });
+    const subject = `Daily Brief — ${new Date().toLocaleDateString()}`;
+    if (config.email.to) {
+      await sendEmail({
+        subject,
+        text: content,
+        html: content.replace(/\n/g, "<br>"),
+      });
+    }
+    const preview = content.length > 3500 ? content.slice(0, 3497) + "…" : content;
+    await notifyTelegramUsers(`📋 ${subject}\n\n${preview}`);
     markBriefSent();
     res.json({ sent: true, content });
   } catch (err) {

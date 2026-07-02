@@ -10,6 +10,7 @@ import { emailRouter } from "./routes/email.js";
 import { telegramRouter } from "./routes/telegram.js";
 import { profileRouter } from "./routes/profile.js";
 import { startScheduler } from "./services/scheduler.js";
+import { runBootTasks } from "./setup.js";
 import { startTelegramBot } from "./telegram/bot.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -47,7 +48,8 @@ app.get("*", (req, res, next) => {
     req.path.startsWith("/email") ||
     req.path.startsWith("/telegram") ||
     req.path.startsWith("/profile") ||
-    req.path.startsWith("/knowledge")
+    req.path.startsWith("/knowledge") ||
+    req.path.startsWith("/github")
   ) {
     next();
     return;
@@ -80,4 +82,5 @@ app.listen(config.port, () => {
   }
   startScheduler();
   startTelegramBot();
+  runBootTasks().catch(console.error);
 });

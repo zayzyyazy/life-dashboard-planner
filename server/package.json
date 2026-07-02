@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "npx tsx watch src/index.ts",
     "start": "npx tsx src/index.ts",
+    "setup": "npx tsx src/setup-cli.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

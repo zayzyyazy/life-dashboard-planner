@@ -11,6 +11,7 @@ export default defineConfig({
       "/projects": "http://localhost:3847",
       "/tasks": "http://localhost:3847",
       "/reminders": "http://localhost:3847",
+      "/github": "http://localhost:3847",
       "/watch": "http://localhost:3847",
       "/updates": "http://localhost:3847",
       "/messages": "http://localhost:3847",

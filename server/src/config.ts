@@ -67,11 +67,23 @@ export const config = {
     resendApiKey: process.env.RESEND_API_KEY ?? "",
   },
   github: {
-    token: process.env.GITHUB_TOKEN ?? "",
+    token: cleanEnv(process.env.GITHUB_TOKEN),
+    username: cleanEnv(process.env.GITHUB_USERNAME),
+    autoSync: process.env.GITHUB_AUTO_SYNC !== "false",
+    watchRepos: cleanEnv(process.env.GITHUB_WATCH_REPOS)
+      .split(",")
+      .map((r) => r.trim())
+      .filter(Boolean),
+    syncLimit: Number(process.env.GITHUB_SYNC_LIMIT ?? 20),
   },
   brief: {
     cron: process.env.DAILY_BRIEF_CRON ?? "0 7 * * *",
     timezone: process.env.TZ ?? "America/New_York",
+    enabledByDefault: process.env.DAILY_BRIEF_ENABLED !== "false",
+  },
+  reminders: {
+    enabledByDefault: process.env.REMINDERS_ENABLED !== "false",
+    checkCron: process.env.REMINDER_CHECK_CRON ?? "*/5 * * * *",
   },
   security: {
     allowShell: process.env.ALLOW_SHELL === "true",

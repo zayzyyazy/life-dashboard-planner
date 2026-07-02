@@ -21,16 +21,18 @@ interface WatchedFolder {
 export function WatchersPanel() {
   const [repos, setRepos] = useState<WatchedRepo[]>([]);
   const [folders, setFolders] = useState<WatchedFolder[]>([]);
+  const [githubStatus, setGithubStatus] = useState<{ watched_count: number; token_configured: boolean } | null>(null);
   const [repoUrl, setRepoUrl] = useState("");
   const [folderPath, setFolderPath] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const load = () => {
-    Promise.all([api.getWatchedRepos(), api.getWatchedFolders()])
-      .then(([r, f]) => {
+    Promise.all([api.getWatchedRepos(), api.getWatchedFolders(), api.getGitHubStatus()])
+      .then(([r, f, g]) => {
         setRepos(r as WatchedRepo[]);
         setFolders(f as WatchedFolder[]);
+        setGithubStatus(g as { watched_count: number; token_configured: boolean });
       })
       .finally(() => setLoading(false));
   };
@@ -63,10 +65,34 @@ export function WatchersPanel() {
     }
   };
 
+  const syncGitHub = async () => {
+    setError(null);
+    try {
+      await api.syncGitHubRepos();
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sync failed");
+    }
+  };
+
   return (
     <section className="panel">
       <h2>Watchers</h2>
       <TelegramStatusPanel />
+      {githubStatus && (
+        <p className="muted">
+          GitHub: {githubStatus.token_configured ? "connected" : "no token"} ·{" "}
+          {githubStatus.watched_count} repo(s) watched
+          {githubStatus.token_configured && (
+            <>
+              {" "}
+              <button className="btn-secondary btn-small" onClick={syncGitHub}>
+                Sync my repos
+              </button>
+            </>
+          )}
+        </p>
+      )}
       {error && <p className="error">{error}</p>}
 
       <div className="watch-form">
