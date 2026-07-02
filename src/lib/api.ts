@@ -1,13 +1,40 @@
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
+const REQUEST_TIMEOUT_MS = 45_000;
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    ...options,
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? `Request failed: ${res.status}`);
-  return data as T;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      ...options,
+      signal: controller.signal,
+    });
+    let data: { error?: string };
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error(
+        res.ok
+          ? "Invalid response from server"
+          : `Server error ${res.status}. Is the backend running on port 3847?`
+      );
+    }
+    if (!res.ok) throw new Error(data.error ?? `Request failed: ${res.status}`);
+    return data as T;
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("Request timed out. Check the server terminal for errors.");
+    }
+    if (err instanceof TypeError) {
+      throw new Error(
+        "Cannot reach the server. Run npm run dev and check for [server] errors in Terminal."
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export interface ChatResult {

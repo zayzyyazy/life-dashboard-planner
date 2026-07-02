@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "./lib/api";
 import { ProfilePanel } from "./components/ProfilePanel";
 import { BriefPanel } from "./components/BriefPanel";
