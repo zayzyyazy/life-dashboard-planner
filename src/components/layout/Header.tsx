@@ -2,7 +2,12 @@ import { formatHeaderDate, getWeekNumber } from "../../lib/dateUtils";
 import { enterMiniMode } from "../../lib/windowControls";
 import { useApp } from "../../store/AppContext";
 
-export function Header() {
+type Props = {
+  title?: string;
+  subtitle?: string;
+};
+
+export function Header({ title, subtitle }: Props) {
   const { setMiniMode } = useApp();
   const now = new Date();
 
@@ -15,8 +20,8 @@ export function Header() {
     <header className="header">
       <div className="header-row">
         <div>
-          <h2>{formatHeaderDate(now)}</h2>
-          <p>Week {getWeekNumber(now)}</p>
+          <h2>{title ?? formatHeaderDate(now)}</h2>
+          <p>{subtitle ?? `Week ${getWeekNumber(now)}`}</p>
         </div>
         <button className="btn btn-sm mini-mode-btn" onClick={handleMiniMode} title="Compact always-on-top view">
           Mini Mode

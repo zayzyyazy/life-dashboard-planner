@@ -1,4 +1,5 @@
 import type { Task, TaskDraft, TaskKind, TaskPriority, TaskTag } from "../types/task";
+import { inferBucket } from "./bucketUtils";
 
 export function createTaskId(): string {
   return crypto.randomUUID();
@@ -20,6 +21,12 @@ export function createTask(draft: TaskDraft): Task {
     tag: draft.tag,
     priority: draft.priority,
     kind: draft.kind ?? "task",
+    bucket: draft.bucket ?? (draft.startTime ? "scheduled" : inferBucket({
+      date: draft.date,
+      priority: draft.priority,
+      startTime: draft.startTime,
+      done: draft.done ?? false,
+    })),
     estimatedHours: draft.estimatedHours,
     startTime: draft.startTime,
     endTime: draft.endTime,

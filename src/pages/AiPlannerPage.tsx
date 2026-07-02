@@ -1,27 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { SuggestedTaskCard } from "../components/tasks/SuggestedTaskCard";
+import { AgentMemoryPanel } from "../components/agent/AgentMemoryPanel";
 import { useApp } from "../store/AppContext";
 
 const QUICK = [
-  "Plan Today",
-  "Plan Tomorrow",
-  "Plan This Week",
-  "Review My Week",
-  "Add Study Blocks",
-  "Add Gym Sessions",
-  "Balance My Schedule",
+  "What's on my plate today?",
+  "Plan my day",
+  "What can you access?",
+  "Remember: ",
+  "Move urgent stuff to must-do",
 ];
 
 export function AiPlannerPage() {
   const {
     planner,
-    settings,
+    agentMemory,
     lastAutoSavedAt,
     lastAutoSavedCount,
     sendPlannerMessage,
     runQuickAction,
-    approveSuggestions,
-    rejectSuggestions,
     clearPlannerChat,
   } = useApp();
   const [input, setInput] = useState("");
@@ -30,12 +26,12 @@ export function AiPlannerPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (lastAutoSavedAt > 0 && settings.planner.autoSave) {
-      setBanner(`${lastAutoSavedCount} task(s) added — see Week or All Tasks`);
+    if (lastAutoSavedAt > 0) {
+      setBanner(`Agent updated ${lastAutoSavedCount} task(s) — check Dashboard`);
       const t = setTimeout(() => setBanner(""), 5000);
       return () => clearTimeout(t);
     }
-  }, [lastAutoSavedAt, lastAutoSavedCount, settings.planner.autoSave]);
+  }, [lastAutoSavedAt, lastAutoSavedCount]);
 
   const send = async (text: string) => {
     if (!text.trim() || loading) return;
@@ -46,13 +42,14 @@ export function AiPlannerPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const autoSaveOn = settings.planner.autoSave;
-
   return (
-    <div>
-      {banner && (
-        <div className="autosave-banner">{banner}</div>
-      )}
+    <div className="agent-page">
+      {banner && <div className="autosave-banner">{banner}</div>}
+
+      <p className="agent-intro">
+        Your personal planner agent. Dump updates, plans, and random thoughts — I'll remember them,
+        organize your tasks, and connect to your local apps.
+      </p>
 
       <div className="quick-actions">
         {QUICK.map((q) => (
@@ -65,13 +62,13 @@ export function AiPlannerPage() {
         </button>
       </div>
 
-      <div className="planner-layout">
+      <div className="planner-layout agent-layout">
         <div className="chat-panel">
           <div className="chat-messages">
             {planner.messages.length === 0 && (
               <p className="empty-state">
-                Tell me what you need to do this week — exams, gym, work days, assignments…
-                I'll ask follow-ups and suggest a schedule.
+                Hey — I'm your planner agent. Tell me what's going on: deadlines, ideas, what you
+                finished, what's stressing you out. I'll turn it into a plan.
               </p>
             )}
             {planner.messages.map((m) => (
@@ -87,7 +84,7 @@ export function AiPlannerPage() {
           >
             <input
               className="input"
-              placeholder="Plan my week… I have an exam Friday…"
+              placeholder="Update me… exam Friday, finished the report, gym at 5…"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={loading}
@@ -98,35 +95,7 @@ export function AiPlannerPage() {
           </form>
         </div>
 
-        <aside className="suggestions-panel">
-          <div className="section-title">Suggested Tasks</div>
-          {autoSaveOn ? (
-            <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
-              Auto-save is on. New suggestions are added to your task list immediately.
-              Turn off in Settings to preview before saving.
-            </p>
-          ) : planner.pendingSuggestions.length === 0 ? (
-            <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
-              Approve a plan to add tasks to your calendar.
-            </p>
-          ) : (
-            <>
-              <div className="stack">
-                {planner.pendingSuggestions.map((s, i) => (
-                  <SuggestedTaskCard key={`${s.title}-${i}`} task={s} />
-                ))}
-              </div>
-              <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
-                <button className="btn btn-primary" onClick={approveSuggestions}>
-                  Approve Plan
-                </button>
-                <button className="btn" onClick={rejectSuggestions}>
-                  Reject Plan
-                </button>
-              </div>
-            </>
-          )}
-        </aside>
+        <AgentMemoryPanel entries={agentMemory.entries.slice(0, 12)} />
       </div>
     </div>
   );

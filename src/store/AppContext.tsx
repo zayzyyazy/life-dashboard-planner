@@ -20,6 +20,8 @@ import {
   loadWeekTemplates,
   loadViewWeekStart,
   loadHiddenBuiltinBoxes,
+  loadProjects,
+  saveProjects,
   saveViewWeekStart,
   saveHiddenBuiltinBoxes,
   syncCoursesFromVault,
@@ -40,36 +42,24 @@ import { createTask, createTaskId, nowIso, updateTask } from "../lib/taskUtils";
 import type { ChatMessage, PlannerState } from "../types/planner";
 import type { AppSettings } from "../types/settings";
 import type { ActivityTemplate, CourseDashboardCourse, SavedWeekTemplate } from "../types/template";
+import type { Project, ProjectDraft } from "../types/project";
+import { createProject, updateProject } from "../lib/projectUtils";
 import type { BoxKind } from "../types/box";
 import type { SuggestedTask, Task, TaskDraft } from "../types/task";
 import { shortcutApi } from "../lib/shortcutApi";
-import { hasScheduleDetails } from "../lib/captureParser";
 import { addDays, normalizeTaskDate, startOfWeek, toDateString } from "../lib/dateUtils";
-import { parseCaptureText } from "../lib/captureParser";
 import { enrichSuggestionsWithTimes } from "../lib/scheduleUtils";
+import { loadAgentMemory, recordMemory, saveAgentMemory } from "../lib/agent/memory";
+import { runAgentTurn } from "../lib/agent/runtime";
+import { createAgentToolkit } from "../lib/agent/toolkit";
+import type { AgentMemoryState } from "../types/agent";
+import { inferBucket } from "../lib/bucketUtils";
 
-type Page = "today" | "week" | "month" | "all" | "planner" | "review" | "settings";
-
-function isVaguePlanningIntent(text: string, context: Record<string, string>): boolean {
-  if (context.awaiting) return false;
-  if (hasScheduleDetails(text)) return false;
-  const t = text.toLowerCase().trim();
-  const short = t.split(/\s+/).length <= 6;
-  if (short && /plan\s+(my\s+)?(today|day)/.test(t)) return true;
-  if (short && /plan\s+(my\s+)?tomorrow/.test(t)) return true;
-  if (short && /plan\s+(my\s+)?(week|this\s+week)/.test(t)) return true;
-  return false;
-}
-
-function planTargetFromText(text: string): string {
-  const t = text.toLowerCase();
-  if (/tomorrow/.test(t)) return "tomorrow";
-  if (/week/.test(t)) return "week";
-  return "today";
-}
+type Page = "dashboard" | "today" | "week" | "month" | "all" | "planner" | "review" | "settings";
 
 type State = {
   tasks: Task[];
+  projects: Project[];
   planner: PlannerState;
   settings: AppSettings;
   templates: ActivityTemplate[];
@@ -83,9 +73,15 @@ type State = {
   isMiniMode: boolean;
   lastAutoSavedAt: number;
   lastAutoSavedCount: number;
+  agentMemory: AgentMemoryState;
 };
 
 type Action =
+  | { type: "SET_AGENT_MEMORY"; memory: AgentMemoryState }
+  | { type: "SET_PROJECTS"; projects: Project[] }
+  | { type: "ADD_PROJECT"; draft: ProjectDraft }
+  | { type: "UPDATE_PROJECT"; id: string; patch: Partial<Project> }
+  | { type: "DELETE_PROJECT"; id: string }
   | { type: "SET_PAGE"; page: Page }
   | { type: "SET_TASKS"; tasks: Task[] }
   | { type: "ADD_TASK"; draft: TaskDraft }
@@ -113,6 +109,27 @@ type Action =
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
+    case "SET_AGENT_MEMORY":
+      return { ...state, agentMemory: action.memory };
+    case "SET_PROJECTS":
+      return { ...state, projects: action.projects };
+    case "ADD_PROJECT":
+      return { ...state, projects: [...state.projects, createProject(action.draft)] };
+    case "UPDATE_PROJECT":
+      return {
+        ...state,
+        projects: state.projects.map((p) =>
+          p.id === action.id ? updateProject(p, action.patch) : p
+        ),
+      };
+    case "DELETE_PROJECT":
+      return {
+        ...state,
+        projects: state.projects.filter((p) => p.id !== action.id),
+        tasks: state.tasks.map((t) =>
+          t.projectId === action.id ? updateTask(t, { projectId: undefined }) : t
+        ),
+      };
     case "SET_PAGE":
       return { ...state, page: action.page };
     case "SET_TASKS":
@@ -141,7 +158,17 @@ function reducer(state: State, action: Action): State {
         }))
       );
       const newTasks = normalized.map((s) =>
-        createTask({ ...s, done: false, source: "capture" })
+        createTask({
+          ...s,
+          done: false,
+          source: "capture",
+          bucket: s.bucket ?? (s.startTime ? "scheduled" : inferBucket({
+            date: s.date,
+            priority: s.priority,
+            startTime: s.startTime,
+            done: false,
+          })),
+        })
       );
       return {
         ...state,
@@ -218,6 +245,7 @@ function initState(): State {
   }
   return {
     tasks: loadTasks(),
+    projects: loadProjects(),
     planner: loadPlannerState(),
     settings,
     templates: loadTemplates(),
@@ -226,15 +254,19 @@ function initState(): State {
     viewWeekStart: loadViewWeekStart(),
     sessionBoxes: [],
     hiddenBuiltinBoxes: loadHiddenBuiltinBoxes(),
-    page: "week",
+    page: "dashboard",
     shortcutStatus: "",
     isMiniMode: false,
     lastAutoSavedCount: 0,
     lastAutoSavedAt: 0,
+    agentMemory: loadAgentMemory(),
   };
 }
 
 type AppContextValue = State & {
+  addProject: (draft: ProjectDraft) => void;
+  editProject: (id: string, patch: Partial<Project>) => void;
+  removeProject: (id: string) => void;
   navigate: (page: Page) => void;
   addTask: (draft: TaskDraft) => void;
   editTask: (id: string, patch: Partial<Task>) => void;
@@ -274,6 +306,8 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, initState);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   const provider = useMemo(
     () => createPlannerProvider(state.settings),
@@ -312,6 +346,112 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveHiddenBuiltinBoxes(state.hiddenBuiltinBoxes);
   }, [state.hiddenBuiltinBoxes]);
 
+  useEffect(() => {
+    saveProjects(state.projects);
+  }, [state.projects]);
+
+  useEffect(() => {
+    saveAgentMemory(state.agentMemory);
+  }, [state.agentMemory]);
+
+  const runAgent = useCallback(
+    async (text: string, source: "chat" | "shortcut") => {
+      const session = {
+        tasks: [...stateRef.current.tasks],
+        projects: [...stateRef.current.projects],
+        memory: stateRef.current.agentMemory,
+      };
+
+      const userMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: source === "shortcut" ? `📱 ${text}` : text,
+        timestamp: new Date().toISOString(),
+      };
+      dispatch({ type: "ADD_MESSAGE", message: userMsg });
+
+      session.memory = recordMemory(session.memory, text, source, source === "shortcut" ? ["phone"] : ["chat"]);
+      dispatch({ type: "SET_AGENT_MEMORY", memory: session.memory });
+
+      const history = stateRef.current.planner.messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      const toolkit = createAgentToolkit({
+        getTasks: () => session.tasks,
+        getProjects: () => session.projects,
+        getMemory: () => session.memory,
+        setMemory: (memory) => {
+          session.memory = memory;
+          dispatch({ type: "SET_AGENT_MEMORY", memory });
+        },
+        addTask: (draft) => {
+          const task = createTask(draft);
+          session.tasks.push(task);
+          dispatch({ type: "ADD_TASK", draft });
+        },
+        updateTask: (id, patch) => {
+          const idx = session.tasks.findIndex((t) => t.id === id);
+          if (idx >= 0) session.tasks[idx] = updateTask(session.tasks[idx], patch);
+          dispatch({ type: "UPDATE_TASK", id, patch });
+        },
+        addProject: (draft) => {
+          const project = createProject(draft);
+          session.projects.push(project);
+          dispatch({ type: "ADD_PROJECT", draft });
+        },
+        shortcutStatus: stateRef.current.shortcutStatus,
+      });
+
+      const turn = await runAgentTurn(
+        text,
+        toolkit,
+        stateRef.current.settings,
+        history
+      );
+
+      let reply = turn.reply;
+      if (turn.tasksChanged > 0) {
+        reply += `\n\n✓ Updated ${turn.tasksChanged} task${turn.tasksChanged === 1 ? "" : "s"}.`;
+        dispatch({ type: "SET_LAST_AUTO_SAVED", count: turn.tasksChanged, at: Date.now() });
+      }
+      if (turn.toolCalls.length > 0 && turn.tasksChanged === 0 && !reply.includes("?")) {
+        const toolSummary = turn.toolCalls
+          .map((tc) => {
+            try {
+              const r = JSON.parse(tc.result ?? "{}") as Record<string, unknown>;
+              if (r.error) return null;
+              if (tc.name === "get_dashboard" && r.briefing) return String(r.briefing);
+              if (tc.name === "list_tasks" && Array.isArray(JSON.parse(tc.result ?? "[]"))) {
+                const items = JSON.parse(tc.result ?? "[]") as { title: string }[];
+                return items.length
+                  ? items.map((i) => `• ${i.title}`).join("\n")
+                  : "Nothing in that list.";
+              }
+              if (tc.name === "list_integrations") return null;
+              return null;
+            } catch {
+              return null;
+            }
+          })
+          .filter(Boolean)
+          .join("\n");
+        if (toolSummary) reply += `\n\n${toolSummary}`;
+      }
+
+      const assistantMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: reply,
+        timestamp: new Date().toISOString(),
+      };
+      dispatch({ type: "ADD_MESSAGE", message: assistantMsg });
+      dispatch({ type: "CLEAR_SUGGESTIONS" });
+    },
+    []
+  );
+
   const syncCourseBoxes = useCallback(async () => {
     const vaultCourses = await readCourseDashboardCourses();
     const { templates, courses } = syncCoursesFromVault(vaultCourses);
@@ -347,27 +487,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const processShortcutCapture = useCallback(
     async (text: string) => {
-      const suggestions = parseCaptureText(text);
-      if (state.settings.shortcut.autoSave) {
-        dispatch({ type: "ADD_TASKS_FROM_SUGGESTIONS", suggestions });
-        dispatch({
-          type: "ADD_MESSAGE",
-          message: {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            content: `📱 iPhone capture saved ${suggestions.length} task(s): ${suggestions.map((s) => s.title).join(", ")}`,
-            timestamp: new Date().toISOString(),
-          },
-        });
-      } else {
-        dispatch({ type: "SET_SUGGESTIONS", suggestions });
-        dispatch({
-          type: "SET_SHORTCUT_STATUS",
-          status: `Captured ${suggestions.length} item(s) — enable auto-save in Settings to add directly`,
-        });
-      }
+      await runAgent(text, "shortcut");
     },
-    [state.settings.shortcut.autoSave]
+    [runAgent]
   );
 
   useEffect(() => {
@@ -392,77 +514,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const sendPlannerMessage = useCallback(
     async (text: string) => {
-      const userMsg: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: text,
-        timestamp: new Date().toISOString(),
-      };
-      dispatch({ type: "ADD_MESSAGE", message: userMsg });
-
-      const response = await provider.generateResponse(
-        text,
-        state.planner.context,
-        state.tasks
-      );
-
-      let replyText = response.reply;
-      const vaguePlan = isVaguePlanningIntent(text, state.planner.context);
-      let suggestions = response.suggestions ?? [];
-
-      if (vaguePlan) {
-        suggestions = [];
-        if (!replyText.includes("?")) {
-          replyText =
-            "What do you need to do? List your tasks, meetings, and any fixed times (e.g. work 10–18, gym at 17:00).";
-        }
-      }
-
-      if (response.contextUpdates) {
-        dispatch({
-          type: "UPDATE_PLANNER_CONTEXT",
-          context: response.contextUpdates,
-          followUp: response.followUp,
-        });
-      } else if (vaguePlan) {
-        const planTarget = planTargetFromText(text);
-        dispatch({
-          type: "UPDATE_PLANNER_CONTEXT",
-          context: {
-            awaiting: "plan-details",
-            planTarget,
-            ...(planTarget === "week" && /\bnext\s+week\b/i.test(text) ? { nextWeek: "true" } : {}),
-          },
-          followUp: "plan-details",
-        });
-      }
-
-      const canAutoSave =
-        suggestions.length > 0 && !response.followUp && !vaguePlan;
-
-      if (canAutoSave && state.settings.planner.autoSave) {
-        dispatch({ type: "ADD_TASKS_FROM_SUGGESTIONS", suggestions });
-        dispatch({ type: "SET_LAST_AUTO_SAVED", count: suggestions.length, at: Date.now() });
-        replyText += `\n\nAdded ${suggestions.length} task(s) to your list.`;
-      } else if (suggestions.length > 0) {
-        dispatch({ type: "SET_SUGGESTIONS", suggestions });
-      }
-
-      const assistantMsg: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: replyText,
-        timestamp: new Date().toISOString(),
-      };
-      dispatch({ type: "ADD_MESSAGE", message: assistantMsg });
+      await runAgent(text, "chat");
     },
-    [provider, state.planner.context, state.tasks, state.settings.planner.autoSave]
+    [runAgent]
   );
 
   const value: AppContextValue = {
     ...state,
     provider,
     navigate: (page) => dispatch({ type: "SET_PAGE", page }),
+    addProject: (draft) => dispatch({ type: "ADD_PROJECT", draft }),
+    editProject: (id, patch) => dispatch({ type: "UPDATE_PROJECT", id, patch }),
+    removeProject: (id) => dispatch({ type: "DELETE_PROJECT", id }),
     addTask: (draft) => dispatch({ type: "ADD_TASK", draft }),
     editTask: (id, patch) => dispatch({ type: "UPDATE_TASK", id, patch }),
     removeTask: (id) => dispatch({ type: "DELETE_TASK", id }),
@@ -533,11 +596,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     syncCourseBoxes,
     reloadFromStorage: () => {
       dispatch({ type: "SET_TASKS", tasks: loadTasks() });
+      dispatch({ type: "SET_PROJECTS", projects: loadProjects() });
       dispatch({ type: "SET_TEMPLATES", templates: loadTemplates() });
       dispatch({ type: "SET_COURSES", courses: loadCourses() });
       dispatch({ type: "SET_WEEK_TEMPLATES", weekTemplates: loadWeekTemplates() });
       dispatch({ type: "SET_VIEW_WEEK", weekStart: loadViewWeekStart() });
       dispatch({ type: "SET_HIDDEN_BUILTIN_BOXES", kinds: loadHiddenBuiltinBoxes() });
+      dispatch({ type: "SET_AGENT_MEMORY", memory: loadAgentMemory() });
     },
     goToPrevWeek: () => {
       dispatch({ type: "SET_VIEW_WEEK", weekStart: addDays(state.viewWeekStart, -7) });
