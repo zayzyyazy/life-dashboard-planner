@@ -85,6 +85,12 @@ export const config = {
     enabledByDefault: process.env.REMINDERS_ENABLED !== "false",
     checkCron: process.env.REMINDER_CHECK_CRON ?? "*/5 * * * *",
   },
+  idleNudge: {
+    enabled: process.env.IDLE_NUDGE_ENABLED !== "false",
+    idleHours: Number(process.env.IDLE_NUDGE_HOURS ?? 2),
+    cooldownHours: Number(process.env.IDLE_NUDGE_COOLDOWN_HOURS ?? 4),
+    checkCron: process.env.IDLE_NUDGE_CHECK_CRON ?? "*/15 * * * *",
+  },
   security: {
     allowShell: process.env.ALLOW_SHELL === "true",
   },

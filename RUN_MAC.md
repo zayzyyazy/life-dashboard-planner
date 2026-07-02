@@ -52,3 +52,23 @@ fnm use 22
 ```
 
 Then run restart script again.
+
+---
+
+## Load personal context (after pull):
+
+```bash
+npm run seed:profile -- --force
+```
+
+---
+
+## Run in background when Mac is on (24/7 while laptop awake):
+
+```bash
+npm run install:daemon
+```
+
+Starts on login, restarts if it crashes. Logs: `~/Library/Logs/life-planner-agent.log`
+
+To stop: `launchctl unload ~/Library/LaunchAgents/com.lifeplanner.agent.plist`

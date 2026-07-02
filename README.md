@@ -165,6 +165,22 @@ OPENAI_TRANSCRIPTION_MODEL=whisper-1
 
 Check status: `GET /telegram/status` or the **Watchers** tab in the dashboard.
 
+### One chat, one brain
+
+**Telegram:** You have one continuous chat thread with your bot — every text message and voice note appears in that same Telegram conversation, in order.
+
+**Shared memory:** Telegram, the local dashboard, and `POST /chat` all use the same SQLite database. When you add a task on Telegram, it shows up in the dashboard. When you save something in chat, the agent knows it on Telegram too.
+
+**What the agent remembers:** Your profile ("About you"), knowledge notes, projects, tasks, reminders, and project updates persist across all channels. Every message is logged in `agent_messages`.
+
+**Idle check-in:** When the Mac agent is running and you haven't sent an update in ~2 hours, you'll get a Telegram message: *"Been a while — want to update me…?"* Configure with `IDLE_NUDGE_HOURS` in `.env`.
+
+**Load your personal context:**
+
+```bash
+npm run seed:profile -- --force   # overwrite profile from seed file
+```
+
 ## API Endpoints
 
 | Method | Path | Description |

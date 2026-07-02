@@ -70,6 +70,16 @@ export function getLastTelegramMessageAt(): string | null {
   return row?.created_at ?? null;
 }
 
+export function getLastUserActivityAt(): string | null {
+  const row = getDb()
+    .prepare(
+      `SELECT created_at FROM agent_messages
+       WHERE role = 'user' ORDER BY created_at DESC LIMIT 1`
+    )
+    .get() as { created_at: string } | undefined;
+  return row?.created_at ?? null;
+}
+
 export function findProjectId(name: string | null): number | null {
   if (!name) return null;
   const db = getDb();

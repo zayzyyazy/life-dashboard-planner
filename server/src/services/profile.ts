@@ -106,7 +106,15 @@ export async function seedProfileIfEmpty(): Promise<boolean> {
   if (profile.summary?.trim()) {
     return false;
   }
+  await applyProfileSeed(false);
+  return true;
+}
 
+export async function seedProfileForce(): Promise<void> {
+  await applyProfileSeed(true);
+}
+
+async function applyProfileSeed(forceKnowledge: boolean) {
   const { USER_PROFILE_SEED, USER_KNOWLEDGE_SEED } = await import("../data/user-profile-seed.js");
 
   updateProfile(USER_PROFILE_SEED);
@@ -114,13 +122,17 @@ export async function seedProfileIfEmpty(): Promise<boolean> {
   const existing = getDb()
     .prepare("SELECT COUNT(*) as c FROM user_knowledge")
     .get() as { c: number };
-  if (existing.c === 0) {
+
+  if (existing.c === 0 || forceKnowledge) {
     for (const note of USER_KNOWLEDGE_SEED) {
-      addKnowledge({ ...note, source: "seed" });
+      const dup = getDb()
+        .prepare("SELECT id FROM user_knowledge WHERE title = ? AND domain = ?")
+        .get(note.title, note.domain) as { id: number } | undefined;
+      if (!dup) {
+        addKnowledge({ ...note, source: "seed" });
+      }
     }
   }
-
-  return true;
 }
 
 export function inferDomainFromText(text: string): LifeDomain {
