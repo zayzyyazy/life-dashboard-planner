@@ -7,7 +7,7 @@ import {
 } from "./profile.js";
 import { isLifeDomain, type LifeDomain } from "../types/domains.js";
 import { getGitHubContextForBuildContext } from "./github-chat.js";
-import { normalizeDueAt } from "../agent/parse-due.js";
+import { normalizeDueAt, parseDueDate, formatDueForUser, extractReminderContent } from "../agent/parse-due.js";
 
 export type MessageSource = "dashboard" | "telegram" | "api";
 export type MessageType = "text" | "voice" | "command";
@@ -321,15 +321,70 @@ export async function handleClassification(
     }
 
     case "reminder": {
-      const dueAt = normalizeDueAt(extracted.due_at) ?? tomorrowIso();
+      const dueAt =
+        normalizeDueAt(extracted.due_at) ?? parseDueDate(message) ?? null;
+      if (!dueAt) {
+        return {
+          reply: short
+            ? "When? e.g. in 5 minutes, at 23:30, tomorrow 9am"
+            : "When should I remind you? Try: in 5 minutes, at 23:30, or Thursday at 18:00",
+          actions,
+        };
+      }
+      const reminderText = extracted.content ?? extractReminderContent(message);
       db.prepare(
         "INSERT INTO reminders (project_id, message, due_at) VALUES (?, ?, ?)"
-      ).run(projectId, extracted.content ?? message, dueAt);
+      ).run(projectId, reminderText, dueAt);
       actions.push("created_reminder");
+
+      // Fire immediately if already due (or check within seconds)
+      const { processDueReminders } = await import("./reminders.js");
+      void processDueReminders().catch(console.error);
+
+      const when = formatDueForUser(dueAt);
       return {
         reply: short
-          ? `Reminder saved for ${formatShortDate(dueAt)}.`
-          : `Reminder set for ${dueAt}: ${extracted.content ?? message}`,
+          ? `Reminder set: "${reminderText}" at ${when}.`
+          : `Reminder set for ${when}: ${reminderText}`,
+        actions,
+      };
+    }
+
+    case "reminder_complaint": {
+      const { processDueReminders, getDueReminders } = await import("./reminders.js");
+      const overdue = getDueReminders();
+      const pending = db
+        .prepare(
+          `SELECT message, due_at FROM reminders WHERE status = 'pending' ORDER BY due_at LIMIT 5`
+        )
+        .all() as { message: string; due_at: string }[];
+
+      if (overdue.length > 0) {
+        await processDueReminders();
+        return {
+          reply: short
+            ? `Sorry — sending ${overdue.length} overdue reminder(s) now.`
+            : `Sorry about that. Sending ${overdue.length} overdue reminder(s) now:\n${overdue.map((r) => `• ${r.message}`).join("\n")}`,
+          actions: ["fired_reminders"],
+        };
+      }
+
+      if (pending.length === 0) {
+        return {
+          reply: short
+            ? "No pending reminders. Say: remind me in 5 min to …"
+            : "I don't have any pending reminders. Create one: remind me in 5 minutes to call mom",
+          actions,
+        };
+      }
+
+      const list = pending
+        .map((r) => `• ${r.message} — ${formatDueForUser(r.due_at)}`)
+        .join("\n");
+      return {
+        reply: short
+          ? `Pending:\n${list}\nI'll ping you when each is due.`
+          : `Your pending reminders:\n${list}\n\nThe agent checks every 15 seconds. Make sure the daemon is running.`,
         actions,
       };
     }

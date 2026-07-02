@@ -3,6 +3,7 @@ export type MessageClassification =
   | "task"
   | "task_complete"
   | "reminder"
+  | "reminder_complaint"
   | "decision"
   | "question"
   | "general_memory"

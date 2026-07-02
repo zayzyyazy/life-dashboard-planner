@@ -1,28 +1,48 @@
 import type { ClassificationResult } from "./classifier.js";
-import { parseDueDate } from "./parse-due.js";
+import {
+  extractReminderContent,
+  looksLikeReminder,
+  looksLikeReminderComplaint,
+  parseDueDate,
+} from "./parse-due.js";
 
 /** Reliable keyword classification before LLM — fixes tasks/reminders not saving. */
 export function tryFastClassify(message: string): ClassificationResult | null {
   const trimmed = message.trim();
   const lower = trimmed.toLowerCase();
 
-  if (
-    /^remind\s+me\b/i.test(trimmed) ||
-    /\bremind\s+me\s+(to|about|at|in|on|tomorrow|next)\b/i.test(trimmed)
-  ) {
-    const content = trimmed
-      .replace(/^remind\s+me\s+(to\s+)?/i, "")
-      .replace(/\b(tomorrow|today|next\s+\w+|in\s+\d+\s+\w+|at\s+[\d:]+\s*(am|pm)?)\b/gi, "")
-      .trim();
+  if (looksLikeReminderComplaint(trimmed)) {
+    return {
+      classification: "reminder_complaint",
+      project_name: null,
+      life_domain: null,
+      confidence: 0.95,
+      extracted: { content: trimmed },
+      needs_clarification: false,
+      clarification_question: null,
+    };
+  }
+
+  if (looksLikeReminder(trimmed)) {
+    const due_at = parseDueDate(trimmed) ?? undefined;
+    const content = extractReminderContent(trimmed);
+    if (!due_at) {
+      return {
+        classification: "reminder",
+        project_name: null,
+        life_domain: null,
+        confidence: 0.9,
+        extracted: { content },
+        needs_clarification: true,
+        clarification_question: "When should I remind you? (e.g. in 5 minutes, at 23:30, tomorrow 9am)",
+      };
+    }
     return {
       classification: "reminder",
       project_name: null,
       life_domain: null,
       confidence: 0.95,
-      extracted: {
-        content: content || trimmed,
-        due_at: parseDueDate(trimmed) ?? undefined,
-      },
+      extracted: { content, due_at },
       needs_clarification: false,
       clarification_question: null,
     };

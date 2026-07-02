@@ -83,7 +83,7 @@ export const config = {
   },
   reminders: {
     enabledByDefault: process.env.REMINDERS_ENABLED !== "false",
-    checkCron: process.env.REMINDER_CHECK_CRON ?? "*/5 * * * *",
+    checkCron: process.env.REMINDER_CHECK_CRON ?? "*/1 * * * *",
   },
   idleNudge: {
     enabled: process.env.IDLE_NUDGE_ENABLED !== "false",

@@ -17,6 +17,12 @@ import { notifyTelegramUsers } from "../telegram/notify.js";
 export function startScheduler() {
   startFolderWatcher();
 
+  // Reminders: every 15 seconds (reliable for "in 3 minutes")
+  setInterval(() => {
+    processDueReminders().catch(console.error);
+    processDueTasks().catch(console.error);
+  }, 15_000);
+
   // GitHub: check every 30 minutes
   cron.schedule("*/30 * * * *", () => {
     checkAllRepos().catch(console.error);
