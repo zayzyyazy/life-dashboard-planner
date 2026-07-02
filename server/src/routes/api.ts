@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { processChat, processCapture } from "../agent/chat.js";
+import { processChat, processCapture } from "../services/chat.js";
 import { addWatchedRepo, checkRepo, listWatchedRepos } from "../services/github.js";
 import { addWatchedFolder, listWatchedFolders } from "../services/folder.js";
 import { getDb } from "../db/index.js";
@@ -13,7 +13,7 @@ router.post("/chat", async (req, res) => {
       res.status(400).json({ error: "message is required" });
       return;
     }
-    const result = await processChat(message.trim());
+    const result = await processChat(message.trim(), { source: "dashboard" });
     res.json(result);
   } catch (err) {
     console.error(err);
@@ -28,7 +28,7 @@ router.post("/capture", async (req, res) => {
       res.status(400).json({ error: "text is required" });
       return;
     }
-    const result = await processCapture(text.trim());
+    const result = await processCapture(text.trim(), { source: "dashboard" });
     res.json(result);
   } catch (err) {
     console.error(err);

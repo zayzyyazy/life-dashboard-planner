@@ -7,7 +7,9 @@ import { getDb } from "./db/index.js";
 import { router as apiRouter } from "./routes/api.js";
 import { briefRouter } from "./routes/brief.js";
 import { emailRouter } from "./routes/email.js";
+import { telegramRouter } from "./routes/telegram.js";
 import { startScheduler } from "./services/scheduler.js";
+import { startTelegramBot } from "./telegram/bot.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "../..");
@@ -23,6 +25,7 @@ getDb();
 app.use("/", apiRouter);
 app.use("/brief", briefRouter);
 app.use("/email", emailRouter);
+app.use("/telegram", telegramRouter);
 
 // Serve dashboard in production
 const dashboardDist = path.join(rootDir, "dist");
@@ -39,7 +42,8 @@ app.get("*", (req, res, next) => {
     req.path.startsWith("/messages") ||
     req.path.startsWith("/health") ||
     req.path.startsWith("/brief") ||
-    req.path.startsWith("/email")
+    req.path.startsWith("/email") ||
+    req.path.startsWith("/telegram")
   ) {
     next();
     return;
@@ -56,4 +60,5 @@ app.listen(config.port, () => {
     console.warn("WARNING: OPENAI_API_KEY not set — chat will fail until configured");
   }
   startScheduler();
+  startTelegramBot();
 });

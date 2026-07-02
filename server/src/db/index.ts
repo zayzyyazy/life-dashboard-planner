@@ -14,9 +14,30 @@ export function getDb(): Database.Database {
     db.pragma("journal_mode = WAL");
     db.pragma("foreign_keys = ON");
     db.exec(SCHEMA_SQL);
+    migrateAgentMessages(db);
     seedDefaults(db);
   }
   return db;
+}
+
+function migrateAgentMessages(database: Database.Database) {
+  const cols = database
+    .prepare("PRAGMA table_info(agent_messages)")
+    .all() as { name: string }[];
+  const names = new Set(cols.map((c) => c.name));
+  const additions: [string, string][] = [
+    ["source", "TEXT NOT NULL DEFAULT 'dashboard'"],
+    ["telegram_chat_id", "TEXT"],
+    ["telegram_message_id", "TEXT"],
+    ["message_type", "TEXT NOT NULL DEFAULT 'text'"],
+    ["transcript_text", "TEXT"],
+    ["raw_text", "TEXT"],
+  ];
+  for (const [name, definition] of additions) {
+    if (!names.has(name)) {
+      database.exec(`ALTER TABLE agent_messages ADD COLUMN ${name} ${definition}`);
+    }
+  }
 }
 
 function seedDefaults(database: Database.Database) {

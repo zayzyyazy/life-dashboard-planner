@@ -14,6 +14,7 @@ export const config = {
     apiKey: process.env.OPENAI_API_KEY ?? "",
     defaultModel: process.env.OPENAI_DEFAULT_MODEL ?? "gpt-4o-mini",
     planningModel: process.env.OPENAI_PLANNING_MODEL ?? "gpt-4o",
+    transcriptionModel: process.env.OPENAI_TRANSCRIPTION_MODEL ?? "whisper-1",
   },
   email: {
     provider: (process.env.EMAIL_PROVIDER ?? "smtp") as "smtp" | "resend",
@@ -36,5 +37,15 @@ export const config = {
   },
   security: {
     allowShell: process.env.ALLOW_SHELL === "true",
+  },
+  telegram: {
+    botToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
+    allowedUserIds: (process.env.TELEGRAM_ALLOWED_USER_IDS ?? "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean),
+    enableVoice: process.env.TELEGRAM_ENABLE_VOICE !== "false",
+    enableText: process.env.TELEGRAM_ENABLE_TEXT !== "false",
+    enableCommands: process.env.TELEGRAM_ENABLE_COMMANDS !== "false",
   },
 };

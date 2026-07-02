@@ -1,6 +1,6 @@
 import { config } from "../config.js";
 import { getDb } from "../db/index.js";
-import { chatCompletion } from "../agent/openai.js";
+import { chatCompletion } from "./openai.js";
 
 export interface RepoRef {
   owner: string;

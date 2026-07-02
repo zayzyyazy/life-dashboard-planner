@@ -89,6 +89,12 @@ CREATE TABLE IF NOT EXISTS agent_messages (
   content TEXT NOT NULL,
   classification TEXT,
   metadata TEXT,
+  source TEXT NOT NULL DEFAULT 'dashboard',
+  telegram_chat_id TEXT,
+  telegram_message_id TEXT,
+  message_type TEXT NOT NULL DEFAULT 'text',
+  transcript_text TEXT,
+  raw_text TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

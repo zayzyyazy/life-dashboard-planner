@@ -59,6 +59,16 @@ export interface AgentMessage {
   created_at: string;
 }
 
+export interface TelegramStatus {
+  enabled: boolean;
+  token_configured: boolean;
+  allowed_users_configured: boolean;
+  voice_enabled: boolean;
+  text_enabled: boolean;
+  commands_enabled: boolean;
+  last_message_at: string | null;
+}
+
 export const api = {
   chat: (message: string) =>
     request<ChatResult>("/chat", { method: "POST", body: JSON.stringify({ message }) }),
@@ -88,4 +98,5 @@ export const api = {
 
   getWatchedRepos: () => request<unknown[]>("/watch/github"),
   getWatchedFolders: () => request<unknown[]>("/watch/folder"),
+  getTelegramStatus: () => request<TelegramStatus>("/telegram/status"),
 };

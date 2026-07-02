@@ -278,6 +278,24 @@ button:disabled {
   flex: 1;
 }
 
+.telegram-status {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.telegram-status h3 {
+  margin: 0 0 0.5rem;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.875rem;
+  padding: 0.25rem 0;
+}
+
 .status-blocked {
   border-left: 3px solid var(--error);
   padding-left: 0.75rem;

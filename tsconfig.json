@@ -17,5 +17,5 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src/main.tsx", "src/App.tsx", "src/lib/api.ts", "src/components/ChatPanel.tsx", "src/components/ProjectsPanel.tsx", "src/components/BriefPanel.tsx", "src/components/TasksPanel.tsx", "src/components/WatchersPanel.tsx", "src/components/UpdatesPanel.tsx", "src/styles/**/*", "src/vite-env.d.ts"]
+  "include": ["src/main.tsx", "src/App.tsx", "src/lib/api.ts", "src/components/ChatPanel.tsx", "src/components/ProjectsPanel.tsx", "src/components/BriefPanel.tsx", "src/components/TasksPanel.tsx", "src/components/WatchersPanel.tsx", "src/components/UpdatesPanel.tsx", "src/components/TelegramStatusPanel.tsx", "src/styles/**/*", "src/vite-env.d.ts"]
 }

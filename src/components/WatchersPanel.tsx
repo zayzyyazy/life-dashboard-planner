@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { TelegramStatusPanel } from "./TelegramStatusPanel";
 
 interface WatchedRepo {
   id: number;
@@ -65,6 +66,7 @@ export function WatchersPanel() {
   return (
     <section className="panel">
       <h2>Watchers</h2>
+      <TelegramStatusPanel />
       {error && <p className="error">{error}</p>}
 
       <div className="watch-form">

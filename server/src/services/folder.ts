@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
 import { getDb } from "../db/index.js";
-import { chatCompletion } from "../agent/openai.js";
+import { chatCompletion } from "./openai.js";
 
 const IGNORED = new Set([
   "node_modules",

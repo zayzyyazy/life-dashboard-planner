@@ -65,7 +65,7 @@ Return JSON:
 If project is unclear and confidence < 0.7, set needs_clarification true with one short question.
 Parse relative dates (tomorrow, next week, Friday) relative to today. Today is {{TODAY}}.`;
 
-import { chatCompletion } from "./openai.js";
+import { chatCompletion } from "../services/openai.js";
 
 export async function classifyMessage(
   message: string,

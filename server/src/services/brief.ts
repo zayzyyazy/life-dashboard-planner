@@ -1,5 +1,5 @@
 import { getDb } from "../db/index.js";
-import { chatCompletion } from "../agent/openai.js";
+import { chatCompletion } from "./openai.js";
 import { checkAllRepos } from "./github.js";
 import { checkAllFolders } from "./folder.js";
 

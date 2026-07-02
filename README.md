@@ -10,20 +10,21 @@ Built as a **Node/TypeScript agent backend** with SQLite memory and a local web 
 
 This project is the **project brain + memory + watchers + brief engine**. You can:
 
-- Run it standalone via the local dashboard (MVP)
-- Later connect OpenClaw to this HTTP API as a skill/webhook
-- Optionally add Telegram via OpenClaw without rewriting core logic
+- Run it standalone via the local dashboard
+- Chat from your phone via **Telegram** (first-class channel)
+- Later connect OpenClaw to this HTTP API as a skill/webhook (optional)
 
 ## Features
 
-- **Chat interface** — classify and store project updates, tasks, reminders, decisions
+- **Chat interface** — local dashboard + Telegram (text and voice notes)
 - **SQLite memory** — projects, updates, tasks, reminders, watched repos/folders, daily briefs
 - **Project brain** — auto-attach info to Marie, MCP Server, QA Call Analysis, etc.
 - **GitHub watcher** — track commits, issues, PRs; save summaries as project updates
 - **Folder watcher** — detect local file changes (ignores node_modules, .git, dist, etc.)
 - **Daily brief** — generated each morning from updates, tasks, reminders, watchers
 - **Email** — SMTP (Gmail) or Resend
-- **Security** — no shell access by default; API keys in `.env`
+- **Telegram** — text, voice transcription, commands; same brain as `POST /chat`
+- **Security** — no shell access by default; API keys in `.env`; Telegram user ID allowlist
 
 ## Requirements
 
@@ -31,6 +32,7 @@ This project is the **project brain + memory + watchers + brief engine**. You ca
 - Node.js 22+ (24 recommended)
 - OpenAI API key
 - Email: Gmail App Password (SMTP) or Resend API key
+- Telegram bot token (for phone chat)
 
 ## Quick Start (Mac)
 
@@ -42,6 +44,7 @@ npm run install:all
 # 2. Configure environment
 cp .env.example .env
 # Edit .env — add OPENAI_API_KEY, EMAIL_FROM, EMAIL_TO, SMTP_PASS (or Resend)
+# For Telegram: TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOWED_USER_IDS
 
 # 3. Run (server + dashboard)
 npm run dev
@@ -59,6 +62,96 @@ npm start
 
 Dashboard is served from the same port (3847) after build.
 
+## Telegram Setup
+
+Telegram messages go through the **same pipeline as `POST /chat`** — same classifier, memory, project brain, reminders, and brief system. No separate Telegram-only flow.
+
+### Step-by-step
+
+1. Open **Telegram** on your phone or desktop
+2. Search for **@BotFather**
+3. Send `/newbot`
+4. Choose a **bot name** (display name, e.g. `My Life Planner`)
+5. Choose a **bot username** ending in `bot` (e.g. `my_life_planner_bot`)
+6. Copy the **bot token** BotFather gives you
+7. Add to `.env`:
+   ```
+   TELEGRAM_BOT_TOKEN=123456789:ABCdefGHI...
+   ```
+8. Get your **Telegram user ID**:
+   - Message **@userinfobot** on Telegram and copy your numeric ID, or
+   - Start the app without `TELEGRAM_ALLOWED_USER_IDS` set — the bot logs your user ID on first message and tells you what to add
+9. Add to `.env`:
+   ```
+   TELEGRAM_ALLOWED_USER_IDS=123456789
+   ```
+   (Comma-separate multiple IDs if needed.)
+10. Restart the server: `npm run dev`
+11. Open Telegram, find your bot, send `/start`
+12. Confirm the bot replies
+
+### Telegram quick setup
+
+1. Create bot with @BotFather
+2. Copy token into `.env`
+3. Get my Telegram user ID
+4. Add it to `TELEGRAM_ALLOWED_USER_IDS`
+5. Run:
+   ```bash
+   npm run dev
+   ```
+6. Open Telegram and send:
+   ```
+   /start
+   ```
+7. Test text:
+   ```
+   Add this to Life Planner Agent: Telegram integration is working.
+   ```
+8. Test voice note:
+   Send a short voice note saying a reminder.
+9. Check dashboard:
+   http://localhost:5173
+
+### Telegram commands
+
+| Command | Description |
+|---------|-------------|
+| `/start` | Introduction |
+| `/brief` | Today's daily brief |
+| `/projects` | List saved projects |
+| `/tasks` | Open tasks |
+| `/reminders` | Upcoming reminders |
+| `/watchrepo <url>` | Add GitHub repo watcher |
+| `/help` | Example messages |
+
+### Voice notes
+
+Voice notes are downloaded from Telegram, transcribed with OpenAI (`OPENAI_TRANSCRIPTION_MODEL`, default `whisper-1`), then passed into the same chat pipeline. The bot replies:
+
+> I heard: [short transcript]. Saved as reminder.
+
+If transcription fails:
+
+> I received the voice note but couldn't transcribe it. Please resend as text.
+
+### Authorization
+
+Only user IDs in `TELEGRAM_ALLOWED_USER_IDS` can use the bot. Everyone else gets **"Not authorized."** and the message is **not** sent to the LLM. Blocked chat IDs are logged to the server console.
+
+### Telegram environment variables
+
+```
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_ALLOWED_USER_IDS=
+TELEGRAM_ENABLE_VOICE=true
+TELEGRAM_ENABLE_TEXT=true
+TELEGRAM_ENABLE_COMMANDS=true
+OPENAI_TRANSCRIPTION_MODEL=whisper-1
+```
+
+Check status: `GET /telegram/status` or the **Watchers** tab in the dashboard.
+
 ## API Endpoints
 
 | Method | Path | Description |
@@ -74,6 +167,7 @@ Dashboard is served from the same port (3847) after build.
 | GET | `/brief/today` | Generate/get today's brief |
 | POST | `/brief/send-daily` | Email today's brief |
 | POST | `/email/send-test` | Send test email |
+| GET | `/telegram/status` | Telegram bot status (no token exposed) |
 | GET | `/health` | Health check |
 
 ## Example Chat Commands
@@ -187,10 +281,12 @@ Adjust `npm` path with `which npm`.
 
 ## OpenClaw Integration (Later)
 
-Once OpenClaw is installed (`npm install -g openclaw && openclaw onboard`):
+OpenClaw is optional. **Telegram is built in** — you don't need OpenClaw for phone chat.
+
+If you later install OpenClaw (`npm install -g openclaw && openclaw onboard`):
 
 1. Point a webhook or custom skill at `http://localhost:3847/chat`
-2. Use OpenClaw for Telegram/WhatsApp; this app remains the memory/brain
+2. Use OpenClaw for additional channels (WhatsApp, Slack, etc.)
 3. Keep `ALLOW_SHELL=false` in this service; let OpenClaw handle channel permissions
 
 ## Architecture
@@ -202,8 +298,8 @@ Once OpenClaw is installed (`npm install -g openclaw && openclaw onboard`):
 └─────────────────┘     │  ├─ SQLite memory                │
                         │  ├─ GitHub / folder watchers     │
 ┌─────────────────┐     │  ├─ Daily brief generator        │
-│  OpenClaw       │────▶│  └─ Email (SMTP / Resend)        │
-│  (optional)     │     └──────────────────────────────────┘
+│  Telegram Bot   │────▶│  └─ Email (SMTP / Resend)        │
+│  (phone)        │     └──────────────────────────────────┘
 └─────────────────┘                    │
                                        ▼
                               data/life-planner.db
@@ -215,6 +311,7 @@ Once OpenClaw is installed (`npm install -g openclaw && openclaw onboard`):
 |----------|---------------|---------|
 | Classification, summaries | `gpt-4o-mini` | `OPENAI_DEFAULT_MODEL` |
 | Daily brief, deep planning | `gpt-4o` | `OPENAI_PLANNING_MODEL` |
+| Voice transcription | `whisper-1` | `OPENAI_TRANSCRIPTION_MODEL` |
 
 ## Security
 
@@ -226,10 +323,14 @@ Once OpenClaw is installed (`npm install -g openclaw && openclaw onboard`):
 ## Project Structure
 
 ```
-server/           Agent backend (Express, SQLite, OpenAI)
-src/              React dashboard
-data/             SQLite DB (gitignored)
-.env.example      Environment template
+server/
+  src/
+    services/       chat, memory, openai (shared brain)
+    telegram/       bot, handlers, voice
+    routes/         HTTP endpoints
+src/                React dashboard
+data/               SQLite DB (gitignored)
+.env.example
 ```
 
 ## Author
