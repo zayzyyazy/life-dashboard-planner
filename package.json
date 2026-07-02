@@ -23,7 +23,7 @@
     "docker:logs": "docker compose logs -f",
     "check-env": "node scripts/check-env.mjs",
     "typecheck": "tsc && npm run typecheck --prefix server",
-    "install:all": "npm install && npm install --prefix server"
+    "install:all": "node scripts/check-node.mjs && npm install && npm install --prefix server"
   },
   "dependencies": {
     "react": "^18.3.1",
