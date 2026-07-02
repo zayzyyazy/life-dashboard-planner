@@ -4,12 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "postinstall": "npm install --prefix server",
+    "predev": "node scripts/ensure-deps.mjs",
     "dev": "concurrently -n server,dashboard -c blue,green \"npm run dev:server\" \"npm run dev:dashboard\"",
     "dev:server": "npm run dev --prefix server",
     "dev:dashboard": "vite",
     "build": "npm run build:dashboard",
     "build:dashboard": "tsc && vite build",
-    "start": "npm run build:dashboard && npm run start --prefix server",
+    "start": "node scripts/ensure-deps.mjs && npm run build:dashboard && npm run start --prefix server",
     "check-env": "node scripts/check-env.mjs",
     "typecheck": "tsc && npm run typecheck --prefix server",
     "install:all": "npm install && npm install --prefix server"
