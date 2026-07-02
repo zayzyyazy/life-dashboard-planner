@@ -8,6 +8,7 @@
     "start": "npx tsx src/index.ts",
     "setup": "npx tsx src/setup-cli.ts",
     "seed:profile": "npx tsx src/seed-profile-cli.ts",
+    "test:reminder": "npx tsx src/test-reminder-cli.ts",
     "typecheck": "tsc --noEmit"
   },
   "engines": {

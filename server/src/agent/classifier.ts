@@ -39,6 +39,7 @@ import {
   listOpenTasksForClassifier,
   type ConversationTurn,
 } from "../services/memory.js";
+import { tryFastClassify } from "./fast-path.js";
 
 function buildClassifierPrompt(today: string, recentChat: string): string {
   const projects = getProjectListForClassifier();
@@ -108,6 +109,9 @@ export async function classifyMessage(
   today: string,
   recentTurns: ConversationTurn[] = []
 ): Promise<ClassificationResult> {
+  const fast = tryFastClassify(message);
+  if (fast) return fast;
+
   const recentChat = formatConversationForClassifier(recentTurns);
   const prompt = buildClassifierPrompt(today, recentChat);
   const raw = await chatCompletion(

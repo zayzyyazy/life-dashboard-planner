@@ -7,6 +7,11 @@ import { checkAllRepos } from "./github.js";
 import { checkAllFolders, startFolderWatcher } from "./folder.js";
 import { processDueReminders, processDueTasks } from "./reminders.js";
 import { processIdleNudge } from "./idle-nudge.js";
+import {
+  processEveningCheckIn,
+  processMorningOutreach,
+  processStaleProjectNudge,
+} from "./proactive.js";
 import { notifyTelegramUsers } from "../telegram/notify.js";
 
 export function startScheduler() {
@@ -28,12 +33,39 @@ export function startScheduler() {
     processDueTasks().catch(console.error);
   });
 
-  // Idle check-in: nudge on Telegram after no updates for a while (Mac must be running)
+  // Idle check-in: nudge on Telegram after no updates for a while
   cron.schedule(config.idleNudge.checkCron, () => {
     processIdleNudge().catch(console.error);
   });
 
-  // Daily brief
+  // Morning outreach: brief + stale projects + ask about the day
+  cron.schedule(
+    config.proactive.morningCron,
+    () => {
+      processMorningOutreach().catch(console.error);
+    },
+    { timezone: config.brief.timezone }
+  );
+
+  // Midday stale project nudge
+  cron.schedule(
+    config.proactive.staleNudgeCron,
+    () => {
+      processStaleProjectNudge().catch(console.error);
+    },
+    { timezone: config.brief.timezone }
+  );
+
+  // Evening check-in
+  cron.schedule(
+    config.proactive.eveningCron,
+    () => {
+      processEveningCheckIn().catch(console.error);
+    },
+    { timezone: config.brief.timezone }
+  );
+
+  // Daily brief (legacy 7am — morning outreach includes brief; keep for email-only users)
   cron.schedule(
     config.brief.cron,
     async () => {
@@ -61,6 +93,6 @@ export function startScheduler() {
   );
 
   console.log(
-    `[scheduler] brief=${config.brief.cron} reminders=${config.reminders.checkCron} idleNudge=${config.idleNudge.checkCron} github=every30m`
+    `[scheduler] brief=${config.brief.cron} morning=${config.proactive.morningCron} evening=${config.proactive.eveningCron} reminders=${config.reminders.checkCron} github=every30m tz=${config.brief.timezone}`
   );
 }

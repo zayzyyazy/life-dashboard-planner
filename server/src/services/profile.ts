@@ -1,5 +1,6 @@
 import { getDb } from "../db/index.js";
 import { domainLabel, isLifeDomain, type LifeDomain } from "../types/domains.js";
+import { USER_PROFILE_SEED, USER_KNOWLEDGE_SEED } from "../data/user-profile-seed.js";
 
 export { domainLabel };
 
@@ -115,8 +116,6 @@ export async function seedProfileForce(): Promise<void> {
 }
 
 async function applyProfileSeed(forceKnowledge: boolean) {
-  const { USER_PROFILE_SEED, USER_KNOWLEDGE_SEED } = await import("../data/user-profile-seed.js");
-
   updateProfile(USER_PROFILE_SEED);
 
   const existing = getDb()

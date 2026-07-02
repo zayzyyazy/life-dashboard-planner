@@ -7,6 +7,7 @@ import {
 } from "./profile.js";
 import { isLifeDomain, type LifeDomain } from "../types/domains.js";
 import { getGitHubContextForBuildContext } from "./github-chat.js";
+import { normalizeDueAt } from "../agent/parse-due.js";
 
 export type MessageSource = "dashboard" | "telegram" | "api";
 export type MessageType = "text" | "voice" | "command";
@@ -261,6 +262,7 @@ export async function handleClassification(
     }
 
     case "task": {
+      const dueDate = normalizeDueAt(extracted.due_at);
       db.prepare(
         `INSERT INTO tasks (project_id, title, description, due_date, blocked_reason, status)
          VALUES (?, ?, ?, ?, ?, ?)`
@@ -268,15 +270,15 @@ export async function handleClassification(
         projectId,
         extracted.title ?? message.slice(0, 120),
         extracted.content ?? message,
-        extracted.due_at ?? null,
+        dueDate,
         extracted.blocked_reason ?? null,
         extracted.blocked_reason ? "blocked" : "open"
       );
       actions.push("created_task");
-      const due = extracted.due_at
+      const due = dueDate
         ? short
-          ? ` Due ${formatShortDate(extracted.due_at)}.`
-          : ` (due ${extracted.due_at})`
+          ? ` Due ${formatShortDate(dueDate)}.`
+          : ` (due ${dueDate})`
         : "";
       const blocked = extracted.blocked_reason
         ? short
@@ -284,9 +286,9 @@ export async function handleClassification(
           : ` [blocked: ${extracted.blocked_reason}]`
         : "";
       const remindNote =
-        extracted.due_at && short
+        dueDate && short
           ? " I'll remind you when it's due."
-          : extracted.due_at
+          : dueDate
             ? " I'll ping you when it's due."
             : "";
       return {
@@ -319,7 +321,7 @@ export async function handleClassification(
     }
 
     case "reminder": {
-      const dueAt = extracted.due_at ?? tomorrowIso();
+      const dueAt = normalizeDueAt(extracted.due_at) ?? tomorrowIso();
       db.prepare(
         "INSERT INTO reminders (project_id, message, due_at) VALUES (?, ?, ?)"
       ).run(projectId, extracted.content ?? message, dueAt);

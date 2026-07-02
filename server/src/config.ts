@@ -78,7 +78,7 @@ export const config = {
   },
   brief: {
     cron: process.env.DAILY_BRIEF_CRON ?? "0 7 * * *",
-    timezone: process.env.TZ ?? "America/New_York",
+    timezone: process.env.TZ ?? "Europe/Berlin",
     enabledByDefault: process.env.DAILY_BRIEF_ENABLED !== "false",
   },
   reminders: {
@@ -90,6 +90,15 @@ export const config = {
     idleHours: Number(process.env.IDLE_NUDGE_HOURS ?? 2),
     cooldownHours: Number(process.env.IDLE_NUDGE_COOLDOWN_HOURS ?? 4),
     checkCron: process.env.IDLE_NUDGE_CHECK_CRON ?? "*/15 * * * *",
+  },
+  proactive: {
+    morningEnabled: process.env.MORNING_OUTREACH_ENABLED !== "false",
+    morningCron: process.env.MORNING_OUTREACH_CRON ?? "0 8 * * *",
+    eveningEnabled: process.env.EVENING_CHECKIN_ENABLED !== "false",
+    eveningCron: process.env.EVENING_CHECKIN_CRON ?? "0 20 * * *",
+    staleNudgeEnabled: process.env.STALE_PROJECT_NUDGE_ENABLED !== "false",
+    staleNudgeCron: process.env.STALE_PROJECT_NUDGE_CRON ?? "0 14 * * *",
+    staleProjectDays: Number(process.env.STALE_PROJECT_DAYS ?? 5),
   },
   chat: {
     historyLimit: Number(process.env.CHAT_HISTORY_LIMIT ?? 16),

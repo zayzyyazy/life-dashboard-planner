@@ -17,7 +17,7 @@ export function getDueReminders(): DueReminder[] {
        FROM reminders r
        LEFT JOIN projects p ON p.id = r.project_id
        WHERE r.status = 'pending'
-         AND r.due_at <= datetime('now')
+         AND datetime(r.due_at) <= datetime('now')
          AND r.notified_at IS NULL
        ORDER BY r.due_at`
     )

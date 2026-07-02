@@ -9,8 +9,12 @@ export async function runSetup(): Promise<void> {
   console.log("[setup] Running Life Planner Agent setup…");
   getDb();
 
-  if (await seedProfileIfEmpty()) {
-    console.log("[setup] Personal profile seeded (About you)");
+  try {
+    if (await seedProfileIfEmpty()) {
+      console.log("[setup] Personal profile seeded (About you)");
+    }
+  } catch (err) {
+    console.error("[setup] Profile seed failed:", err instanceof Error ? err.message : err);
   }
 
   if (config.brief.enabledByDefault) {

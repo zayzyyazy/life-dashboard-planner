@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config, getEnvStatus } from "./config.js";
 import { getDb } from "./db/index.js";
+import { ensureBootSettings } from "./db/boot-settings.js";
 import { router as apiRouter } from "./routes/api.js";
 import { briefRouter } from "./routes/brief.js";
 import { emailRouter } from "./routes/email.js";
@@ -44,10 +45,28 @@ app.use(express.json());
 
 // Initialize database
 getDb();
+ensureBootSettings();
 
 // Health first — always responds even if other routes fail
 app.get("/health", (_req, res) => {
-  res.json({ status: "ok", time: new Date().toISOString(), env: getEnvStatus() });
+  const db = getDb();
+  const openTasks = db
+    .prepare(`SELECT COUNT(*) as c FROM tasks WHERE status IN ('open', 'blocked')`)
+    .get() as { c: number };
+  const pendingReminders = db
+    .prepare(`SELECT COUNT(*) as c FROM reminders WHERE status = 'pending'`)
+    .get() as { c: number };
+  res.json({
+    status: "ok",
+    time: new Date().toISOString(),
+    data_dir: config.dataDir,
+    db_path: path.join(config.dataDir, "life-planner.db"),
+    reminders_enabled: db.prepare("SELECT value FROM settings WHERE key = 'reminders_enabled'").get(),
+    open_tasks: openTasks.c,
+    pending_reminders: pendingReminders.c,
+    timezone: config.brief.timezone,
+    env: getEnvStatus(),
+  });
 });
 
 // API routes
@@ -96,6 +115,8 @@ app.listen(config.port, host, () => {
   console.log(
     `[config] TELEGRAM_ALLOWED_USER_IDS: ${envStatus.telegram_allowed_users_configured ? "configured" : "not set"}`
   );
+  console.log(`[config] DATA_DIR: ${config.dataDir}`);
+  console.log(`[config] TZ: ${config.brief.timezone}`);
   if (!config.openai.apiKey) {
     console.warn("WARNING: OPENAI_API_KEY not set — chat will fail until configured");
   }
