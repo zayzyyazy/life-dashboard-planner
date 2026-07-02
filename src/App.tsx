@@ -1,32 +1,74 @@
-import { useEffect } from "react";
-import { AppShell } from "./components/layout/AppShell";
-import { AppProvider } from "./store/AppContext";
+import { useState } from "react";
+import { api } from "./lib/api";
+import { BriefPanel } from "./components/BriefPanel";
+import { ChatPanel } from "./components/ChatPanel";
+import { ProjectsPanel } from "./components/ProjectsPanel";
+import { TasksPanel } from "./components/TasksPanel";
+import { UpdatesPanel } from "./components/UpdatesPanel";
+import { WatchersPanel } from "./components/WatchersPanel";
 
-function AppBootProbe() {
-  useEffect(() => {
-    // #region agent log
-    fetch("http://127.0.0.1:7669/ingest/3b256d4b-6996-4a4c-ac88-be9f62070b3a", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "21cca4" },
-      body: JSON.stringify({
-        sessionId: "21cca4",
-        hypothesisId: "BUILD",
-        location: "App.tsx:boot",
-        message: "app boot",
-        data: { buildStamp: __APP_BUILD_STAMP__, features: "day-assistant,palette-delete,full-view" },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
-  }, []);
-  return null;
-}
+type Tab = "chat" | "brief" | "projects" | "tasks" | "watchers" | "updates";
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: "chat", label: "Chat" },
+  { id: "brief", label: "Brief" },
+  { id: "projects", label: "Projects" },
+  { id: "tasks", label: "Tasks" },
+  { id: "watchers", label: "Watchers" },
+  { id: "updates", label: "Updates" },
+];
 
 export default function App() {
+  const [tab, setTab] = useState<Tab>("chat");
+  const [emailMsg, setEmailMsg] = useState<string | null>(null);
+
+  const testEmail = async () => {
+    setEmailMsg(null);
+    try {
+      await api.sendTestEmail();
+      setEmailMsg("Test email sent.");
+    } catch (err) {
+      setEmailMsg(err instanceof Error ? err.message : "Email failed");
+    }
+  };
+
   return (
-    <AppProvider>
-      <AppBootProbe />
-      <AppShell />
-    </AppProvider>
+    <div className="app">
+      <header className="header">
+        <div>
+          <h1>Life Planner Agent</h1>
+          <p className="subtitle">Personal project brain · local-first · always-on</p>
+        </div>
+        <button className="btn-secondary" onClick={testEmail}>
+          Test Email
+        </button>
+      </header>
+      {emailMsg && <p className="banner">{emailMsg}</p>}
+
+      <nav className="tabs">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            className={tab === t.id ? "active" : ""}
+            onClick={() => setTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </nav>
+
+      <main className="main">
+        {tab === "chat" && <ChatPanel />}
+        {tab === "brief" && <BriefPanel />}
+        {tab === "projects" && <ProjectsPanel />}
+        {tab === "tasks" && <TasksPanel />}
+        {tab === "watchers" && <WatchersPanel />}
+        {tab === "updates" && <UpdatesPanel />}
+      </main>
+
+      <footer className="footer">
+        <span>SQLite memory · OpenAI · No shell access by default</span>
+      </footer>
+    </div>
   );
 }
