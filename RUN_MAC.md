@@ -71,4 +71,6 @@ npm run install:daemon
 
 Starts on login, restarts if it crashes. Logs: `~/Library/Logs/life-planner-agent.log`
 
-To stop: `launchctl unload ~/Library/LaunchAgents/com.lifeplanner.agent.plist`
+To stop: `launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.lifeplanner.agent.plist`
+
+**Important:** Don't run `npm run dev` and the daemon at the same time — Telegram only allows one bot connection.

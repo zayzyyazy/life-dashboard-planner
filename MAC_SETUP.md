@@ -148,13 +148,16 @@ curl http://localhost:3847/health
 
 # View logs
 tail -f /tmp/life-planner-agent.log
+tail -f /tmp/life-planner-agent.err
 
 # Stop 24/7
-launchctl unload ~/Library/LaunchAgents/com.lifeplanner.agent.plist
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.lifeplanner.agent.plist
 
 # Start again
-launchctl load ~/Library/LaunchAgents/com.lifeplanner.agent.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.lifeplanner.agent.plist
 ```
+
+> On newer macOS, `launchctl load` / `unload` can fail with "Input/output error". Use `bootstrap` / `bootout` instead (the install script does this automatically).
 
 ### After code updates
 
@@ -215,5 +218,7 @@ npm run dev
 | `exit code 127` | `npm run install:all` |
 | Chat says no OpenAI key | `nano .env` → add `OPENAI_API_KEY` → restart |
 | No GitHub repos | Add `GITHUB_TOKEN` → `npm run setup` |
-| Telegram silent | `npm run dev` must be running; check token + user ID |
+| Telegram silent | Only one instance can poll — stop `npm run dev` before `install:daemon`; check token + user ID |
+| LaunchAgent "Load failed: 5" | `git pull` then re-run `npm run install:daemon` (uses `launchctl bootstrap`) |
+| GitHub 401 Bad credentials | Regenerate token at GitHub → Settings → Developer settings → add to `.env` as `GITHUB_TOKEN` |
 | Brief not arriving | Say in chat: "Send me a daily brief every morning" OR `npm run setup` |
