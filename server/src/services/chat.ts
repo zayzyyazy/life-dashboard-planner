@@ -28,6 +28,7 @@ export interface ProcessChatOptions {
   telegramMessageId?: string;
   transcriptText?: string;
   rawText?: string;
+  replyToText?: string;
   skipUserSave?: boolean;
 }
 
@@ -108,6 +109,9 @@ export async function processChat(
   const historyBefore = getRecentConversation(config.chat.classifierHistoryLimit, {
     excludeLatest: false,
   });
+  if (options.replyToText?.trim()) {
+    historyBefore.push({ role: "user", content: options.replyToText.trim() });
+  }
 
   if (!options.skipUserSave) {
     saveAgentMessage(

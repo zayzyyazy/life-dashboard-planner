@@ -50,15 +50,22 @@ Commands:
 export async function handleTextMessage(
   text: string,
   chatId: number,
-  messageId: number
+  messageId: number,
+  replyToText?: string
 ): Promise<string> {
-  const result = await processChat(text, {
+  const combined =
+    replyToText && replyToText.trim()
+      ? `${text.trim()}\n[context: ${replyToText.trim().slice(0, 200)}]`
+      : text;
+
+  const result = await processChat(combined, {
     source: "telegram",
     messageType: "text",
     replyStyle: "short",
     telegramChatId: String(chatId),
     telegramMessageId: String(messageId),
     rawText: text,
+    replyToText,
   });
   return result.reply;
 }

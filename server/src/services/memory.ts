@@ -230,6 +230,9 @@ export async function handleClassification(
   const updateSource = options.updateSource ?? "chat";
 
   if (result.needs_clarification && result.clarification_question) {
+    if (result.classification === "reminder" && result.extracted.content) {
+      setSetting("pending_reminder_draft", result.extracted.content);
+    }
     return { reply: result.clarification_question, actions };
   }
 
@@ -336,6 +339,7 @@ export async function handleClassification(
         "INSERT INTO reminders (project_id, message, due_at) VALUES (?, ?, ?)"
       ).run(projectId, reminderText, dueAt);
       actions.push("created_reminder");
+      setSetting("pending_reminder_draft", "");
 
       // Fire immediately if already due (or check within seconds)
       const { processDueReminders } = await import("./reminders.js");

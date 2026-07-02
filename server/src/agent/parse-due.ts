@@ -40,7 +40,7 @@ export function parseDueDate(message: string, now = new Date()): string | null {
     return at.toISOString();
   }
 
-  // "at 23:30" / "at 11pm" without today/tomorrow → today if still ahead, else tomorrow
+  // "at 23:30" without today/tomorrow
   if (/\bat\s+\d{1,2}/i.test(message)) {
     const d = new Date(now);
     let at = parseAtTime(message, d);
@@ -51,12 +51,70 @@ export function parseDueDate(message: string, now = new Date()): string | null {
     return at.toISOString();
   }
 
+  const bare = parseBareDateTime(message, now);
+  if (bare) return bare;
+
   return null;
+}
+
+/** "23:36", "Jul 2nd 23:35", "2 Jul 23:35" */
+export function parseBareDateTime(text: string, now = new Date()): string | null {
+  const t = text.trim();
+
+  const hm = t.match(/^(\d{1,2}):(\d{2})$/);
+  if (hm) {
+    const d = new Date(now);
+    d.setHours(parseInt(hm[1], 10), parseInt(hm[2], 10), 0, 0);
+    if (d.getTime() <= now.getTime()) d.setDate(d.getDate() + 1);
+    return d.toISOString();
+  }
+
+  const m1 = t.match(/^(\w+)\s+(\d{1,2})(?:st|nd|rd|th)?\s+(\d{1,2}):(\d{2})$/i);
+  if (m1) {
+    return dateFromMonthDay(m1[1], parseInt(m1[2], 10), parseInt(m1[3], 10), parseInt(m1[4], 10), now);
+  }
+
+  const m2 = t.match(/^(\d{1,2})\s+(\w+)(?:\s+(\d{4}))?\s+(\d{1,2}):(\d{2})$/i);
+  if (m2) {
+    const year = m2[3] ? parseInt(m2[3], 10) : now.getFullYear();
+    return dateFromMonthDay(m2[2], parseInt(m2[1], 10), parseInt(m2[4], 10), parseInt(m2[5], 10), now, year);
+  }
+
+  const wdOnly = t.match(/^(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i);
+  if (wdOnly) {
+    const d = resolveWeekday(wdOnly[1], false, now);
+    d.setHours(9, 0, 0, 0);
+    return d.toISOString();
+  }
+
+  return null;
+}
+
+function dateFromMonthDay(
+  monthStr: string,
+  day: number,
+  hours: number,
+  minutes: number,
+  now: Date,
+  year = now.getFullYear()
+): string | null {
+  const months: Record<string, number> = {
+    jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2, apr: 3, april: 3,
+    may: 4, jun: 5, june: 5, jul: 6, july: 6, aug: 7, august: 7,
+    sep: 8, sept: 8, september: 8, oct: 9, october: 9, nov: 10, november: 10,
+    dec: 11, december: 11,
+  };
+  const m = months[monthStr.toLowerCase().slice(0, 3)];
+  if (m === undefined) return null;
+  const d = new Date(year, m, day, hours, minutes, 0, 0);
+  return d.toISOString();
 }
 
 function parseAtTime(message: string, base: Date): Date {
   const d = new Date(base);
-  const match = message.match(/\bat\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  const match =
+    message.match(/\bat\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i) ||
+    message.match(/\b(\d{1,2}):(\d{2})\s*(am|pm)?/i);
   if (!match) {
     if (d.getHours() === 0 && d.getMinutes() === 0) {
       d.setHours(9, 0, 0, 0);
@@ -128,18 +186,32 @@ export function extractReminderContent(message: string): string {
     .replace(/\b(?:tomorrow|today)\b/gi, "")
     .replace(/\bin\s+\d+\s*(?:min|mins|minute|minutes|hour|hours|hr|hrs)\b/gi, "")
     .replace(/\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?/gi, "")
+    .replace(/\b\d{1,2}:\d{2}\b/g, "")
     .replace(/^\s*to\s+/i, "")
     .trim() || message.trim();
 }
 
 export function looksLikeReminder(message: string): boolean {
   const t = message.toLowerCase();
+  const hasClock = /\b\d{1,2}:\d{2}\b/.test(t) || /\bat\s+\d{1,2}/.test(t);
+  const hasWeekday = /\b(?:on\s+)?(?:next\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/.test(t);
   return (
     /^remind\s+me\b/.test(t) ||
     /\bremind\s+me\s+(to|about|at|in|on)\b/.test(t) ||
-    (/\b(remind|remember)\b/.test(t) && (/\bin\s+\d+\s*min/.test(t) || /\bat\s+\d/.test(t))) ||
-    (/\b(?:on\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/.test(t) &&
-      /\bat\s+\d{1,2}/.test(t))
+    (/\b(remind|remember)\b/.test(t) && (/\bin\s+\d+\s*min/.test(t) || hasClock)) ||
+    (hasWeekday && hasClock) ||
+    (/\b(call|text|ping)\b/.test(t) && (hasWeekday || hasClock))
+  );
+}
+
+export function looksLikeTimeFollowUp(message: string): boolean {
+  const t = message.trim();
+  if (t.length > 40) return false;
+  return (
+    /^\d{1,2}:\d{2}$/.test(t) ||
+    /^(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i.test(t) ||
+    /^(\w+\s+\d{1,2}(?:st|nd|rd|th)?\s+\d{1,2}:\d{2})$/i.test(t) ||
+    /^(\d{1,2}\s+\w+\s+\d{1,2}:\d{2})$/i.test(t)
   );
 }
 

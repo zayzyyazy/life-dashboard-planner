@@ -1,13 +1,24 @@
 import type { ClassificationResult } from "./classifier.js";
+import { getSetting } from "../db/index.js";
 import {
   extractReminderContent,
   looksLikeReminder,
   looksLikeReminderComplaint,
+  looksLikeTimeFollowUp,
+  parseBareDateTime,
   parseDueDate,
 } from "./parse-due.js";
 
+interface ConversationTurn {
+  role: string;
+  content: string;
+}
+
 /** Reliable keyword classification before LLM — fixes tasks/reminders not saving. */
-export function tryFastClassify(message: string): ClassificationResult | null {
+export function tryFastClassify(
+  message: string,
+  recentTurns: ConversationTurn[] = []
+): ClassificationResult | null {
   const trimmed = message.trim();
   const lower = trimmed.toLowerCase();
 
@@ -23,6 +34,10 @@ export function tryFastClassify(message: string): ClassificationResult | null {
     };
   }
 
+  // Follow-up: "23:36", "Jul 2nd 23:35", "Thursday" after a reminder thread
+  const followUp = tryReminderFollowUp(trimmed, recentTurns);
+  if (followUp) return followUp;
+
   if (looksLikeReminder(trimmed)) {
     const due_at = parseDueDate(trimmed) ?? undefined;
     const content = extractReminderContent(trimmed);
@@ -34,7 +49,7 @@ export function tryFastClassify(message: string): ClassificationResult | null {
         confidence: 0.9,
         extracted: { content },
         needs_clarification: true,
-        clarification_question: "When should I remind you? (e.g. in 5 minutes, at 23:30, tomorrow 9am)",
+        clarification_question: "When? Reply with a time — e.g. 23:30, in 5 minutes, or Jul 2 23:35",
       };
     }
     return {
@@ -140,6 +155,90 @@ export function tryFastClassify(message: string): ClassificationResult | null {
       clarification_question: null,
     };
   }
+
+  return null;
+}
+
+function tryReminderFollowUp(
+  message: string,
+  recentTurns: ConversationTurn[]
+): ClassificationResult | null {
+  if (!looksLikeTimeFollowUp(message) && !isAwaitingReminderTime(recentTurns)) {
+    return null;
+  }
+
+  const due_at =
+    parseBareDateTime(message) ??
+    parseDueDate(message) ??
+    parseDueDate(`at ${message}`) ??
+    parseDueDate(`on ${message}`);
+
+  if (!due_at && /^(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i.test(message)) {
+    const fallback = parseDueDate(`on ${message} 9:00`);
+    const content = extractReminderSubject(recentTurns);
+    if (fallback && content) {
+      return buildReminderFollowUp(content, fallback);
+    }
+  }
+
+  if (!due_at) return null;
+
+  const content = extractReminderSubject(recentTurns);
+  if (!content) return null;
+
+  return buildReminderFollowUp(content, due_at);
+}
+
+function buildReminderFollowUp(content: string, due_at: string): ClassificationResult {
+  return {
+    classification: "reminder",
+    project_name: null,
+    life_domain: null,
+    confidence: 0.95,
+    extracted: { content, due_at },
+    needs_clarification: false,
+    clarification_question: null,
+  };
+}
+
+function isAwaitingReminderTime(turns: ConversationTurn[]): boolean {
+  const lastAssistant = [...turns].reverse().find((t) => t.role === "assistant");
+  if (!lastAssistant) return false;
+  const c = lastAssistant.content.toLowerCase();
+  return (
+    c.includes("when?") ||
+    c.includes("when should i remind") ||
+    c.includes("reply with a time") ||
+    c.includes("more context")
+  );
+}
+
+function extractReminderSubject(turns: ConversationTurn[]): string | null {
+  const pending = getSetting("pending_reminder_draft");
+  if (pending?.trim()) return pending.trim();
+
+  for (const t of [...turns].reverse()) {
+    if (t.role !== "user") continue;
+    const text = t.content.trim();
+    if (looksLikeTimeFollowUp(text) || text.length < 3) continue;
+
+    if (looksLikeReminder(text) || /\b(call|mom|dad|remind)\b/i.test(text)) {
+      const content = extractReminderContent(text);
+      if (content.length >= 2) return content;
+    }
+
+    // "call mom on thursday 23:30"
+    const callMatch = text.match(/\b(call|text|ping)\s+(.+)/i);
+    if (callMatch) {
+      const content = extractReminderContent(callMatch[2]);
+      if (content.length >= 2) return content;
+    }
+  }
+
+  // From assistant's last reminder confirmation: 'call mom'
+  const lastAssistant = [...turns].reverse().find((t) => t.role === "assistant");
+  const quoted = lastAssistant?.content.match(/"([^"]+)"/);
+  if (quoted?.[1]) return quoted[1];
 
   return null;
 }

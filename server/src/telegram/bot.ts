@@ -203,7 +203,8 @@ async function onMessage(msg: Message) {
   }
 
   if (msg.text && config.telegram.enableText) {
-    const reply = await handleTextMessage(msg.text, chatId, msg.message_id);
+    const replyTo = msg.reply_to_message?.text ?? undefined;
+    const reply = await handleTextMessage(msg.text, chatId, msg.message_id, replyTo);
     await safeReply(chatId, reply);
     return;
   }
