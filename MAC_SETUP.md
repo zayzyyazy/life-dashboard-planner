@@ -98,7 +98,69 @@ Remind me in 2 minutes to test reminders
 
 ---
 
-## Optional: auto-start on Mac login
+## Run 24/7 on your Mac
+
+The agent needs a process running continuously for Telegram, GitHub checks, briefs, and reminders.
+
+**Important:** If your Mac sleeps, the agent pauses until wake. For true 24/7, either:
+- Keep the Mac plugged in and disable sleep: **System Settings → Lock Screen → Turn display off / Prevent automatic sleeping when display is off** (on power adapter), or
+- Run on a always-on machine (old Mac mini, VPS, etc.)
+
+### One-time 24/7 install
+
+```bash
+cd ~/Desktop/life-dashboard-planner
+git pull origin cursor/life-planner-agent-ab65
+npm run setup
+npm run install:daemon
+```
+
+This installs a **LaunchAgent** that:
+- Starts automatically when you log in
+- Restarts if it crashes (`KeepAlive`)
+- Runs Telegram, GitHub watcher, briefs, reminders in the background
+- Serves dashboard at **http://localhost:3847**
+
+### Manage the daemon
+
+```bash
+# Check it's running
+curl http://localhost:3847/health
+
+# View logs
+tail -f /tmp/life-planner-agent.log
+
+# Stop 24/7
+launchctl unload ~/Library/LaunchAgents/com.lifeplanner.agent.plist
+
+# Start again
+launchctl load ~/Library/LaunchAgents/com.lifeplanner.agent.plist
+```
+
+### After code updates
+
+```bash
+cd ~/Desktop/life-dashboard-planner
+git pull origin cursor/life-planner-agent-ab65
+npm run install:all
+npm run build
+launchctl unload ~/Library/LaunchAgents/com.lifeplanner.agent.plist
+npm run install:daemon
+```
+
+---
+
+## Optional: manual always-on (no LaunchAgent)
+
+```bash
+npm run start
+```
+
+Keep Terminal open, or use `tmux` / `screen`. LaunchAgent is better for daily use.
+
+---
+
+## Optional: auto-start on Mac login (legacy)
 
 ```bash
 cd ~/Desktop/life-dashboard-planner
