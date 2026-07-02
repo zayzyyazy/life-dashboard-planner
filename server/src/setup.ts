@@ -2,10 +2,15 @@ import { config } from "./config.js";
 import { getDb, getSetting, setSetting } from "./db/index.js";
 import { syncUserRepos, getGitHubUser } from "./services/github.js";
 import { enableReminders } from "./services/reminders.js";
+import { seedProfileIfEmpty } from "./services/profile.js";
 
 export async function runSetup(): Promise<void> {
   console.log("[setup] Running Life Planner Agent setup…");
   getDb();
+
+  if (await seedProfileIfEmpty()) {
+    console.log("[setup] Personal profile seeded (About you)");
+  }
 
   if (config.brief.enabledByDefault) {
     setSetting("daily_brief_enabled", "true");

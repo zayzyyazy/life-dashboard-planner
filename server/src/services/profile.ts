@@ -101,6 +101,28 @@ export function deleteKnowledge(id: number): boolean {
   return result.changes > 0;
 }
 
+export async function seedProfileIfEmpty(): Promise<boolean> {
+  const profile = getProfile();
+  if (profile.summary?.trim()) {
+    return false;
+  }
+
+  const { USER_PROFILE_SEED, USER_KNOWLEDGE_SEED } = await import("../data/user-profile-seed.js");
+
+  updateProfile(USER_PROFILE_SEED);
+
+  const existing = getDb()
+    .prepare("SELECT COUNT(*) as c FROM user_knowledge")
+    .get() as { c: number };
+  if (existing.c === 0) {
+    for (const note of USER_KNOWLEDGE_SEED) {
+      addKnowledge({ ...note, source: "seed" });
+    }
+  }
+
+  return true;
+}
+
 export function inferDomainFromText(text: string): LifeDomain {
   const lower = text.toLowerCase();
   if (

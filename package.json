@@ -11,6 +11,7 @@
     "preinstall": "node scripts/check-node.mjs",
     "predev": "node scripts/ensure-deps.mjs",
     "setup": "node scripts/ensure-deps.mjs && node scripts/check-env.mjs && npm run setup --prefix server",
+    "seed:profile": "npm run seed:profile --prefix server",
     "dev": "concurrently -n server,dashboard -c blue,green \"npm run dev:server\" \"npm run dev:dashboard\"",
     "dev:server": "npm run dev --prefix server",
     "dev:dashboard": "vite",
