@@ -132,6 +132,11 @@ export async function processChat(
   });
 
   let reply = handled.reply;
+  if (!reply && replyStyle === "short" && classification.classification === "general") {
+    // Skip LLM for vague short Telegram messages — too unreliable
+    reply =
+      'Try: remind me in 5 min to call mom · task: finish essay · /tasks · /reminders';
+  }
   if (!reply) {
     const context = await buildContext();
     const personal = formatPersonalContextForPrompt();

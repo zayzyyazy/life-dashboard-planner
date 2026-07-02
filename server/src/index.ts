@@ -117,6 +117,11 @@ app.listen(config.port, host, () => {
   );
   console.log(`[config] DATA_DIR: ${config.dataDir}`);
   console.log(`[config] TZ: ${config.brief.timezone}`);
+  if (config.brief.timezone === "America/New_York") {
+    console.warn(
+      "[config] TZ is America/New_York — if you're in Germany, set TZ=Europe/Berlin in .env and restart"
+    );
+  }
   if (!config.openai.apiKey) {
     console.warn("WARNING: OPENAI_API_KEY not set — chat will fail until configured");
   }

@@ -11,6 +11,7 @@ export type MessageClassification =
   | "watch_request"
   | "github_query"
   | "brief_request"
+  | "greeting"
   | "general";
 
 export type LifeDomain = "personal_work" | "university" | "personal_life" | "general";

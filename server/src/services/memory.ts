@@ -7,7 +7,7 @@ import {
 } from "./profile.js";
 import { isLifeDomain, type LifeDomain } from "../types/domains.js";
 import { getGitHubContextForBuildContext } from "./github-chat.js";
-import { normalizeDueAt, parseDueDate, formatDueForUser, extractReminderContent } from "../agent/parse-due.js";
+import { normalizeDueAt, parseDueDate, formatDueForUser, formatReminderConfirmation, extractReminderContent } from "../agent/parse-due.js";
 
 export type MessageSource = "dashboard" | "telegram" | "api";
 export type MessageType = "text" | "voice" | "command";
@@ -345,11 +345,11 @@ export async function handleClassification(
       const { processDueReminders } = await import("./reminders.js");
       void processDueReminders().catch(console.error);
 
-      const when = formatDueForUser(dueAt);
+      const when = formatReminderConfirmation(dueAt);
       return {
         reply: short
-          ? `Reminder set: "${reminderText}" at ${when}.`
-          : `Reminder set for ${when}: ${reminderText}`,
+          ? `Reminder set: "${reminderText}" — ${when}`
+          : `Reminder set: ${reminderText} — ${when}`,
         actions,
       };
     }
@@ -483,6 +483,28 @@ export async function handleClassification(
           actions,
         };
       }
+    }
+
+    case "greeting": {
+      const { config } = await import("../config.js");
+      const tzHint =
+        config.brief.timezone === "America/New_York"
+          ? " (Tip: set TZ=Europe/Berlin in .env for correct times)"
+          : "";
+      if (/^no\b/i.test(message.trim())) {
+        return {
+          reply: short
+            ? `Wrong time? Set TZ=Europe/Berlin in .env, restart daemon, then retry.${tzHint}`
+            : `If the time was wrong, add TZ=Europe/Berlin to .env and restart. Then: remind me in 5 min to …`,
+          actions,
+        };
+      }
+      return {
+        reply: short
+          ? `Hey — try: remind me in 5 min to call mom, or task: finish essay.${tzHint}`
+          : `Hey! I can track tasks, reminders, and projects. Try: remind me in 5 minutes to call mom.`,
+        actions,
+      };
     }
 
     case "profile_memory":

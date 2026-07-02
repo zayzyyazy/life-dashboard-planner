@@ -75,6 +75,13 @@ for (const [name, value] of checks) {
   console.log(`${set ? "✓" : required ? "❌" : "⚠"} ${name}: ${preview}`);
 }
 
+const tz = vars.TZ?.trim() || "Europe/Berlin (default)";
+console.log(`✓ TZ: ${tz}`);
+if (!vars.TZ?.trim() || vars.TZ.includes("America/New_York")) {
+  console.log("⚠ For Germany use: TZ=Europe/Berlin  (wrong TZ makes reminders show 6h off)");
+  warnings++;
+}
+
 console.log("");
 if (!ok) {
   console.log("❌ OPENAI_API_KEY is required.");

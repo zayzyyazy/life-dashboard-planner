@@ -4,7 +4,7 @@ import { config } from "../config.js";
 export function parseDueDate(message: string, now = new Date()): string | null {
   const text = message.toLowerCase();
 
-  const inMin = text.match(/\bin\s+(\d+)\s*(min|mins|minute|minutes)\b/);
+  const inMin = text.match(/\bin\s+(\d+)\s*(min|mins?|minutes?)\b/);
   if (inMin) {
     const d = new Date(now);
     d.setMinutes(d.getMinutes() + parseInt(inMin[1], 10));
@@ -179,6 +179,19 @@ export function formatDueForUser(iso: string): string {
   }
 }
 
+/** Human confirmation: local time + timezone + "in X min" for short reminders */
+export function formatReminderConfirmation(iso: string): string {
+  const due = new Date(iso);
+  const now = new Date();
+  const mins = Math.round((due.getTime() - now.getTime()) / 60_000);
+  const when = formatDueForUser(iso);
+  const tz = config.brief.timezone;
+  if (mins > 0 && mins <= 180) {
+    return `${when} (${tz}) — ping in ~${mins} min`;
+  }
+  return `${when} (${tz})`;
+}
+
 export function extractReminderContent(message: string): string {
   return message
     .replace(/^remind\s+me\s+(to\s+)?/i, "")
@@ -198,7 +211,7 @@ export function looksLikeReminder(message: string): boolean {
   return (
     /^remind\s+me\b/.test(t) ||
     /\bremind\s+me\s+(to|about|at|in|on)\b/.test(t) ||
-    (/\b(remind|remember)\b/.test(t) && (/\bin\s+\d+\s*min/.test(t) || hasClock)) ||
+    (/\b(remind|remember)\b/.test(t) && /\bin\s+\d+\s*min/.test(t)) ||
     (hasWeekday && hasClock) ||
     (/\b(call|text|ping)\b/.test(t) && (hasWeekday || hasClock))
   );

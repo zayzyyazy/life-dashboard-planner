@@ -34,6 +34,43 @@ export function tryFastClassify(
     };
   }
 
+  // Greetings — no LLM
+  if (/^(hi|hello|hey|yo)\b[!.,?\s]*$/i.test(trimmed)) {
+    const pending = getSetting("pending_reminder_draft");
+    if (pending) {
+      return {
+        classification: "reminder",
+        project_name: null,
+        life_domain: null,
+        confidence: 0.95,
+        extracted: { content: pending },
+        needs_clarification: true,
+        clarification_question: `Hey — still need a time for "${pending}". Reply: 23:45 or in 5 min.`,
+      };
+    }
+    return {
+      classification: "greeting",
+      project_name: null,
+      life_domain: null,
+      confidence: 1,
+      extracted: {},
+      needs_clarification: false,
+      clarification_question: null,
+    };
+  }
+
+  if (/^no\b/i.test(trimmed) && trimmed.length < 40) {
+    return {
+      classification: "greeting",
+      project_name: null,
+      life_domain: null,
+      confidence: 1,
+      extracted: {},
+      needs_clarification: false,
+      clarification_question: null,
+    };
+  }
+
   // Follow-up: "23:36", "Jul 2nd 23:35", "Thursday" after a reminder thread
   const followUp = tryReminderFollowUp(trimmed, recentTurns);
   if (followUp) return followUp;
