@@ -4,7 +4,6 @@ import { generateDailyBrief } from "../services/brief.js";
 import { processChat } from "../services/chat.js";
 import { addWatchedRepo, checkRepo } from "../services/github.js";
 import { getProfile, listKnowledge, domainLabel } from "../services/profile.js";
-import type { ClassificationResult } from "../agent/classifier.js";
 
 export function isAuthorized(userId: number): boolean {
   if (config.telegram.allowedUserIds.length === 0) return false;
@@ -27,7 +26,7 @@ export function logUnknownUser(chatId: number, userId: number, username?: string
 }
 
 export const START_MESSAGE =
-  "I'm your Life Planner Agent — programmed for you, not a generic bot. Send text or voice notes. I separate personal work, university, and life.";
+  "Hey — I'm your Life Planner Agent. I know your projects, tasks, and schedule. Text or voice me anytime — I'll actually follow up, not just list commands.";
 
 export const HELP_MESSAGE = `Examples:
 • What should I focus on today?
@@ -87,27 +86,10 @@ export async function handleVoiceTranscript(
   });
 
   if (result.classification.needs_clarification) {
-    return `I heard: ${preview}. ${result.reply}`;
+    return result.reply;
   }
 
-  const savedAs = describeSavedAs(result.classification, result.actions);
-  if (result.actions.length > 0) {
-    return `I heard: ${preview}. Saved as ${savedAs}.`;
-  }
-
-  return `I heard: ${preview}. ${result.reply}`;
-}
-
-function describeSavedAs(classification: ClassificationResult, actions: string[]): string {
-  if (actions.includes("completed_task")) return "task completed";
-  if (actions.includes("saved_project_update")) return "project update";
-  if (actions.includes("created_task")) return "task";
-  if (actions.includes("created_reminder")) return "reminder";
-  if (actions.includes("saved_knowledge")) return "personal knowledge";
-  if (actions.includes("watched_repo")) return "repo watcher";
-  if (actions.includes("watched_folder")) return "folder watcher";
-  if (actions.includes("generated_brief")) return "daily brief";
-  return classification.classification.replace(/_/g, " ");
+  return result.reply;
 }
 
 export async function handleBriefCommand(): Promise<string> {

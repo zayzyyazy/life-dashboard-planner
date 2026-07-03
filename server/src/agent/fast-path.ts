@@ -1,4 +1,5 @@
 import type { ClassificationResult } from "./classifier.js";
+import { looksLikeGreeting } from "./conversation.js";
 import { getSetting } from "../db/index.js";
 import {
   extractReminderContent,
@@ -34,8 +35,8 @@ export function tryFastClassify(
     };
   }
 
-  // Greetings — no LLM
-  if (/^(hi|hello|hey|yo)\b[!.,?\s]*$/i.test(trimmed)) {
+  // Greetings — reply via conversational LLM (no canned "Try:" menu)
+  if (looksLikeGreeting(trimmed)) {
     const pending = getSetting("pending_reminder_draft");
     if (pending) {
       return {
@@ -45,7 +46,7 @@ export function tryFastClassify(
         confidence: 0.95,
         extracted: { content: pending },
         needs_clarification: true,
-        clarification_question: `Hey — still need a time for "${pending}". Reply: 23:45 or in 5 min.`,
+        clarification_question: `Still need a time for "${pending}" — when should I ping you? (e.g. 23:45 or in 5 min)`,
       };
     }
     return {
@@ -86,7 +87,7 @@ export function tryFastClassify(
         confidence: 0.9,
         extracted: { content },
         needs_clarification: true,
-        clarification_question: "When? Reply with a time — e.g. 23:30, in 5 minutes, or Jul 2 23:35",
+        clarification_question: "When should I remind you? (e.g. in 5 minutes, at 23:30, tomorrow 9am)",
       };
     }
     return {

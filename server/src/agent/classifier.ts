@@ -79,7 +79,8 @@ Classify each message into exactly one type:
 - watch_request: watch a GitHub repo or local folder
 - github_query: asking about GitHub activity ("what changed in my repos", "commits on X", "open PRs", "github status")
 - brief_request: enable/configure daily brief emails
-- general: casual chat
+- greeting: hi, good morning, casual opener — respond conversationally, not with command lists
+- general: casual chat, venting, thinking out loud, status updates that aren't a structured task/reminder
 
 Return JSON:
 {

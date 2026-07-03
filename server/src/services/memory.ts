@@ -1,5 +1,6 @@
 import { getDb, setSetting } from "../db/index.js";
 import type { ClassificationResult } from "../agent/classifier.js";
+import { getContextHook } from "../agent/conversation.js";
 import {
   addKnowledge,
   domainLabel,
@@ -256,10 +257,12 @@ export async function handleClassification(
       );
       db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(projectId);
       actions.push("saved_project_update");
+      const projectLabel = result.project_name ?? "the project";
+      const preview = (extracted.content ?? message).slice(0, 120);
       return {
         reply: short
-          ? `Added to ${result.project_name}.`
-          : `Added update to ${result.project_name}: ${extracted.title ?? extracted.content ?? message}`,
+          ? `Got it — logged on ${projectLabel}: "${preview}". What's the main goal for this session?`
+          : `Logged your update on ${projectLabel}: ${extracted.title ?? preview}. What's the main thing you want to get done?`,
         actions,
       };
     }
@@ -296,8 +299,8 @@ export async function handleClassification(
             : "";
       return {
         reply: short
-          ? `Task saved.${due}${blocked}${remindNote}`
-          : `Task created${due}${blocked}.${remindNote}`,
+          ? `Saved — "${extracted.title ?? message.slice(0, 80)}".${due}${blocked}${remindNote} What's the first step?`
+          : `Task created${due}${blocked}.${remindNote} What's the first step?`,
         actions,
       };
     }
@@ -317,8 +320,8 @@ export async function handleClassification(
       actions.push("completed_task");
       return {
         reply: short
-          ? `Marked done: ${completed.title}.`
-          : `Marked complete: ${completed.title}`,
+          ? `Nice — marked "${completed.title}" done. What's next on your list?`
+          : `Marked complete: ${completed.title}. What's next?`,
         actions,
       };
     }
@@ -329,8 +332,8 @@ export async function handleClassification(
       if (!dueAt) {
         return {
           reply: short
-            ? "When? e.g. in 5 minutes, at 23:30, tomorrow 9am"
-            : "When should I remind you? Try: in 5 minutes, at 23:30, or Thursday at 18:00",
+            ? "When should I remind you? (e.g. in 5 minutes, at 23:30, tomorrow 9am)"
+            : "When should I remind you? (e.g. in 5 minutes, at 23:30, or Thursday at 18:00)",
           actions,
         };
       }
@@ -348,8 +351,8 @@ export async function handleClassification(
       const when = formatReminderConfirmation(dueAt);
       return {
         reply: short
-          ? `Reminder set: "${reminderText}" — ${when}`
-          : `Reminder set: ${reminderText} — ${when}`,
+          ? `Got it — I'll ping you ${when} about "${reminderText}". Anything else?`
+          : `Reminder set: ${reminderText} — ${when}. Anything else on your mind?`,
         actions,
       };
     }
@@ -376,8 +379,8 @@ export async function handleClassification(
       if (pending.length === 0) {
         return {
           reply: short
-            ? "No pending reminders. Say: remind me in 5 min to …"
-            : "I don't have any pending reminders. Create one: remind me in 5 minutes to call mom",
+            ? "No pending reminders right now — want to set one?"
+            : "I don't have any pending reminders. Want me to set one?",
           actions,
         };
       }
@@ -495,16 +498,11 @@ export async function handleClassification(
         return {
           reply: short
             ? `Wrong time? Set TZ=Europe/Berlin in .env, restart daemon, then retry.${tzHint}`
-            : `If the time was wrong, add TZ=Europe/Berlin to .env and restart. Then: remind me in 5 min to …`,
+            : `If the time was wrong, add TZ=Europe/Berlin to .env and restart, then try your reminder again.`,
           actions,
         };
       }
-      return {
-        reply: short
-          ? `Hey — try: remind me in 5 min to call mom, or task: finish essay.${tzHint}`
-          : `Hey! I can track tasks, reminders, and projects. Try: remind me in 5 minutes to call mom.`,
-        actions,
-      };
+      return { reply: "", actions };
     }
 
     case "profile_memory":
@@ -519,10 +517,11 @@ export async function handleClassification(
         source: updateSource,
       });
       actions.push("saved_knowledge");
+      const hook = getContextHook();
       return {
         reply: short
-          ? `Saved to your ${domainLabel(domain)} knowledge.`
-          : `Saved to your ${domainLabel(domain)} knowledge: ${title}`,
+          ? `Noted in your ${domainLabel(domain)} knowledge.${hook ? ` ${hook}` : ""} Anything else to add?`
+          : `Saved to your ${domainLabel(domain)} knowledge: ${title}. Anything else to add?`,
         actions,
       };
     }

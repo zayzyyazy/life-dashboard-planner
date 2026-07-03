@@ -52,21 +52,25 @@ function buildSystemPrompt(
   context: string,
   replyStyle: ReplyStyle
 ): string {
-  const core = `You are a personal life/project planner for ONE specific user. You have memory of prior messages in this thread plus structured data below.
+  const core = `You are a personal life/project planner for ONE specific user — sharp, warm, and actually paying attention. You have memory of prior messages in this thread plus structured data below.
 
-Behaviors:
-- Use recent conversation to resolve "that", "it", "the Marie thing", follow-ups
+Conversation style:
+- Text like a real person who knows their projects, not a command menu or FAQ bot
+- Mirror their energy — casual if they're casual, direct if they're direct
+- Use their name when you know it
+- After they share an update or you save something, ask ONE natural follow-up when it helps (goal, blocker, priority, timeline)
+- Reference today's tasks, reminders, and recent updates when relevant — be specific
+- Never reply with "Try: remind me…" command lists or feature menus unless they explicitly ask what you can do
 - Keep personal work and university separate
-- Be specific — cite actual tasks, projects, and updates from Current state
-- When they report finishing work, acknowledge and suggest marking tasks done if relevant
-- If they are over-researching or circling, gently nudge one concrete next action (execution over endless learning)
+- When they report finishing work, acknowledge it and tie it to momentum
+- If they're over-researching or circling, gently nudge one concrete next action
 - Match their style: systems thinking, practical, honest — not motivational fluff
 - Do not claim to run shell commands or delete files`;
 
   if (replyStyle === "short") {
     return `${core}
 
-Telegram mode: 1-3 sentences max. Direct and useful.
+Telegram mode: 2-4 short sentences. Natural texting voice. One follow-up question is encouraged when it moves things forward. No bullet lists of example commands.
 
 ${personal}
 
@@ -96,6 +100,14 @@ function toChatMessages(
   }
   msgs.push({ role: "user", content: currentMessage });
   return msgs;
+}
+
+function usesConversationalModel(classification: ClassificationResult["classification"]): boolean {
+  return (
+    classification === "question" ||
+    classification === "general" ||
+    classification === "greeting"
+  );
 }
 
 export async function processChat(
@@ -132,11 +144,6 @@ export async function processChat(
   });
 
   let reply = handled.reply;
-  if (!reply && replyStyle === "short" && classification.classification === "general") {
-    // Skip LLM for vague short Telegram messages — too unreliable
-    reply =
-      'Try: remind me in 5 min to call mom · task: finish essay · /tasks · /reminders';
-  }
   if (!reply) {
     const context = await buildContext();
     const personal = formatPersonalContextForPrompt();
@@ -146,13 +153,9 @@ export async function processChat(
       excludeLatest: true,
     });
 
-    const isPlanning =
-      classification.classification === "question" ||
-      classification.classification === "general";
-
     reply = await chatCompletion(
       [{ role: "system", content: systemPrompt }, ...toChatMessages(conversationHistory, message)],
-      { tier: isPlanning ? "planning" : "default" }
+      { tier: usesConversationalModel(classification.classification) ? "planning" : "default" }
     );
 
     if (replyStyle === "short" && reply.length > 500) {
