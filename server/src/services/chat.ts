@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import { classifyMessage, type ClassificationResult } from "../agent/classifier.js";
+import { AGENT_VOICE, actionReplyAddon, telegramVoiceAddon } from "../agent/voice.js";
 import { config } from "../config.js";
 import { chatCompletion } from "./openai.js";
 import {
@@ -50,42 +51,19 @@ function messageInput(
 function buildSystemPrompt(
   personal: string,
   context: string,
-  replyStyle: ReplyStyle
+  replyStyle: ReplyStyle,
+  actionContext?: string
 ): string {
-  const core = `You are a personal life/project planner for ONE specific user — sharp, warm, and actually paying attention. You have memory of prior messages in this thread plus structured data below.
+  const mode = replyStyle === "short" ? `\n\n${telegramVoiceAddon()}` : "";
 
-Conversation style:
-- Text like a real person who knows their projects, not a command menu or FAQ bot
-- Mirror their energy — casual if they're casual, direct if they're direct
-- Use their name when you know it
-- After they share an update or you save something, ask ONE natural follow-up when it helps (goal, blocker, priority, timeline)
-- Reference today's tasks, reminders, and recent updates when relevant — be specific
-- Never reply with "Try: remind me…" command lists or feature menus unless they explicitly ask what you can do
-- Keep personal work and university separate
-- When they report finishing work, acknowledge it and tie it to momentum
-- If they're over-researching or circling, gently nudge one concrete next action
-- Match their style: systems thinking, practical, honest — not motivational fluff
-- Do not claim to run shell commands or delete files`;
+  const actionBlock = actionContext ? actionReplyAddon(actionContext) : "";
 
-  if (replyStyle === "short") {
-    return `${core}
-
-Telegram mode: 2-4 short sentences. Natural texting voice. One follow-up question is encouraged when it moves things forward. No bullet lists of example commands.
+  return `${AGENT_VOICE}${mode}
 
 ${personal}
 
 Current state:
-${context}`;
-  }
-
-  return `${core}
-
-${personal}
-
-Current state:
-${context}
-
-You help track projects, tasks, reminders, and daily planning. Ask before destructive actions.`;
+${context}${actionBlock}`;
 }
 
 function toChatMessages(
@@ -102,13 +80,21 @@ function toChatMessages(
   return msgs;
 }
 
-function usesConversationalModel(classification: ClassificationResult["classification"]): boolean {
+function usesPlanningModel(
+  classification: ClassificationResult["classification"],
+  hasActionContext: boolean
+): boolean {
+  if (hasActionContext) return true;
   return (
     classification === "question" ||
     classification === "general" ||
-    classification === "greeting"
+    classification === "greeting" ||
+    classification === "project_update" ||
+    classification === "decision"
   );
 }
+
+const TELEGRAM_MAX_REPLY = 1200;
 
 export async function processChat(
   message: string,
@@ -147,7 +133,12 @@ export async function processChat(
   if (!reply) {
     const context = await buildContext();
     const personal = formatPersonalContextForPrompt();
-    const systemPrompt = buildSystemPrompt(personal, context, replyStyle);
+    const systemPrompt = buildSystemPrompt(
+      personal,
+      context,
+      replyStyle,
+      handled.actionContext
+    );
 
     const conversationHistory = getRecentConversation(config.chat.historyLimit, {
       excludeLatest: true,
@@ -155,11 +146,16 @@ export async function processChat(
 
     reply = await chatCompletion(
       [{ role: "system", content: systemPrompt }, ...toChatMessages(conversationHistory, message)],
-      { tier: usesConversationalModel(classification.classification) ? "planning" : "default" }
+      {
+        tier: usesPlanningModel(classification.classification, Boolean(handled.actionContext))
+          ? "planning"
+          : "default",
+      }
     );
 
-    if (replyStyle === "short" && reply.length > 500) {
-      reply = reply.slice(0, 497) + "…";
+    const maxLen = replyStyle === "short" ? TELEGRAM_MAX_REPLY : 4000;
+    if (reply.length > maxLen) {
+      reply = reply.slice(0, maxLen - 1) + "…";
     }
   }
 

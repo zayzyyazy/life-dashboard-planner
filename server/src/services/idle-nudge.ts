@@ -4,7 +4,7 @@ import { getLastUserActivityAt } from "./memory.js";
 import { notifyTelegramUsers } from "../telegram/notify.js";
 
 const NUDGE_MESSAGE =
-  "Been a while — want to update me on what you're doing, or any tasks to mark off or remember?";
+  "You've been quiet — if something's in progress, a quick status helps me keep the picture accurate.";
 
 export async function processIdleNudge(): Promise<boolean> {
   if (!config.idleNudge.enabled) return false;

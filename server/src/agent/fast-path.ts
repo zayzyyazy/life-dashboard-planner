@@ -194,7 +194,45 @@ export function tryFastClassify(
     };
   }
 
+  if (isWorkThreadContinuation(trimmed, recentTurns)) {
+    return {
+      classification: "general",
+      project_name: null,
+      life_domain: null,
+      confidence: 0.85,
+      extracted: { content: trimmed },
+      needs_clarification: false,
+      clarification_question: null,
+    };
+  }
+
   return null;
+}
+
+/** Goal clarifications in an active work thread — not a new project log entry. */
+function isWorkThreadContinuation(
+  message: string,
+  recentTurns: ConversationTurn[]
+): boolean {
+  if (/\b(add this to|update on|remember this)\b/i.test(message)) return false;
+
+  const lower = message.toLowerCase();
+  const continuationCue =
+    /\b(idk|just|need to|trying to|working on|get .+ running|deploy|ship|fix|debug)\b/i.test(
+      lower
+    );
+  if (!continuationCue) return false;
+
+  const recentText = recentTurns
+    .slice(-8)
+    .map((t) => t.content)
+    .join(" ")
+    .toLowerCase();
+  const workTopic =
+    /\b(mcp|marie|leaping|debug|deploy|server|bot|verification|api|backend)\b/i.test(
+      recentText
+    );
+  return workTopic;
 }
 
 function tryReminderFollowUp(

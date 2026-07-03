@@ -75,7 +75,7 @@ export async function processMorningOutreach(): Promise<boolean> {
     );
   }
 
-  parts.push("", "What's the plan today? Send me updates, tasks, or voice notes.");
+  parts.push("", "What's the priority today?");
 
   const msg = parts.join("\n");
   await notifyTelegramUsers(msg.length > 4000 ? msg.slice(0, 3997) + "…" : msg);
@@ -102,14 +102,14 @@ export async function processEveningCheckIn(): Promise<boolean> {
     .prepare(`SELECT COUNT(*) as c FROM project_updates WHERE date(created_at) = date('now')`)
     .get() as { c: number };
 
-  let msg = `Hey ${name} — how did today go?`;
+  let msg = `Evening check-in, ${name}.`;
   if (updatesToday.c > 0) {
-    msg += ` You logged ${updatesToday.c} project update(s) today.`;
+    msg += ` ${updatesToday.c} project update(s) logged today.`;
   }
   if (openTasks.c > 0) {
     msg += ` ${openTasks.c} task(s) still open.`;
   }
-  msg += " Anything to mark done or carry to tomorrow?";
+  msg += " Worth carrying anything to tomorrow?";
 
   await notifyTelegramUsers(msg);
   markSentToday("evening_checkin_date");

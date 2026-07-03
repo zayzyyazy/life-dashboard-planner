@@ -102,7 +102,9 @@ Return JSON:
 }
 
 For university-related items use life_domain university. For startup/work projects use personal_work.
-If project is unclear and confidence < 0.7, set needs_clarification true with one short question.
+If project is unclear and confidence < 0.7, set needs_clarification true with one short specific question.
+If the user is clarifying a goal, answering your prior question, or continuing the same thread — classify as general, NOT a new project_update.
+Do not create duplicate project_update entries when they're refining what they already said.
 NEVER ask for "more context" when the user sends a time, date, or weekday — treat as reminder scheduling.
 Parse relative dates (tomorrow, next week, Friday, in 2 hours) relative to today. Today is ${today}.
 Use ISO 8601 with timezone offset when time is specified.`;

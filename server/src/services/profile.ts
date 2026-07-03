@@ -190,7 +190,7 @@ export function formatPersonalContextForPrompt(): string {
   }
 
   lines.push(
-    "\nKeep personal work and university separate. When unsure which domain, ask one short question."
+    "\nVoice: second brain / thoughtful collaborator — synthesize, connect ideas, challenge when useful. Not a babysitter or cheerleader."
   );
 
   return lines.join("\n");

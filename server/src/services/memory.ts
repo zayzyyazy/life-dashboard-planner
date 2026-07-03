@@ -1,6 +1,5 @@
 import { getDb, setSetting } from "../db/index.js";
 import type { ClassificationResult } from "../agent/classifier.js";
-import { getContextHook } from "../agent/conversation.js";
 import {
   addKnowledge,
   domainLabel,
@@ -222,7 +221,7 @@ export async function handleClassification(
   message: string,
   result: ClassificationResult,
   options: { replyStyle?: ReplyStyle; updateSource?: string } = {}
-): Promise<{ reply: string; actions: string[] }> {
+): Promise<{ reply: string; actions: string[]; actionContext?: string }> {
   const db = getDb();
   const actions: string[] = [];
   const projectId = findProjectId(result.project_name);
@@ -257,13 +256,12 @@ export async function handleClassification(
       );
       db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(projectId);
       actions.push("saved_project_update");
-      const projectLabel = result.project_name ?? "the project";
-      const preview = (extracted.content ?? message).slice(0, 120);
+      const projectLabel = result.project_name ?? "project";
+      const content = extracted.content ?? message;
       return {
-        reply: short
-          ? `Got it — logged on ${projectLabel}: "${preview}". What's the main goal for this session?`
-          : `Logged your update on ${projectLabel}: ${extracted.title ?? preview}. What's the main thing you want to get done?`,
+        reply: "",
         actions,
+        actionContext: `Project update on ${projectLabel}: ${content.slice(0, 400)}`,
       };
     }
 
@@ -281,27 +279,13 @@ export async function handleClassification(
         extracted.blocked_reason ? "blocked" : "open"
       );
       actions.push("created_task");
-      const due = dueDate
-        ? short
-          ? ` Due ${formatShortDate(dueDate)}.`
-          : ` (due ${dueDate})`
-        : "";
-      const blocked = extracted.blocked_reason
-        ? short
-          ? ` Blocked: ${extracted.blocked_reason}.`
-          : ` [blocked: ${extracted.blocked_reason}]`
-        : "";
-      const remindNote =
-        dueDate && short
-          ? " I'll remind you when it's due."
-          : dueDate
-            ? " I'll ping you when it's due."
-            : "";
+      const title = extracted.title ?? message.slice(0, 120);
+      const dueNote = dueDate ? ` (due ${formatShortDate(dueDate)})` : "";
+      const blockedNote = extracted.blocked_reason ? ` [blocked: ${extracted.blocked_reason}]` : "";
       return {
-        reply: short
-          ? `Saved — "${extracted.title ?? message.slice(0, 80)}".${due}${blocked}${remindNote} What's the first step?`
-          : `Task created${due}${blocked}.${remindNote} What's the first step?`,
+        reply: "",
         actions,
+        actionContext: `Task created: ${title}${dueNote}${blockedNote}`,
       };
     }
 
@@ -319,10 +303,9 @@ export async function handleClassification(
       }
       actions.push("completed_task");
       return {
-        reply: short
-          ? `Nice — marked "${completed.title}" done. What's next on your list?`
-          : `Marked complete: ${completed.title}. What's next?`,
+        reply: "",
         actions,
+        actionContext: `Marked task complete: ${completed.title}`,
       };
     }
 
@@ -350,9 +333,7 @@ export async function handleClassification(
 
       const when = formatReminderConfirmation(dueAt);
       return {
-        reply: short
-          ? `Got it — I'll ping you ${when} about "${reminderText}". Anything else?`
-          : `Reminder set: ${reminderText} — ${when}. Anything else on your mind?`,
+        reply: short ? `Reminder set — ${when}.` : `Reminder set for ${when}: ${reminderText}`,
         actions,
       };
     }
@@ -402,10 +383,9 @@ export async function handleClassification(
       ).run(projectId, extracted.title ?? "Decision", extracted.content ?? message);
       actions.push("saved_decision");
       return {
-        reply: short
-          ? `Decision saved${result.project_name ? ` for ${result.project_name}` : ""}.`
-          : `Decision recorded${result.project_name ? ` for ${result.project_name}` : ""}.`,
+        reply: "",
         actions,
+        actionContext: `Decision recorded${result.project_name ? ` (${result.project_name})` : ""}: ${(extracted.content ?? message).slice(0, 300)}`,
       };
     }
 
@@ -517,12 +497,10 @@ export async function handleClassification(
         source: updateSource,
       });
       actions.push("saved_knowledge");
-      const hook = getContextHook();
       return {
-        reply: short
-          ? `Noted in your ${domainLabel(domain)} knowledge.${hook ? ` ${hook}` : ""} Anything else to add?`
-          : `Saved to your ${domainLabel(domain)} knowledge: ${title}. Anything else to add?`,
+        reply: "",
         actions,
+        actionContext: `Saved to ${domainLabel(domain)} knowledge — ${title}: ${content.slice(0, 300)}`,
       };
     }
 
