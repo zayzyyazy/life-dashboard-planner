@@ -3,6 +3,9 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config, getEnvStatus } from "./config.js";
+import { applyProcessTimezone } from "./agent/parse-due.js";
+
+applyProcessTimezone();
 import { getDb } from "./db/index.js";
 import { ensureBootSettings } from "./db/boot-settings.js";
 import { router as apiRouter } from "./routes/api.js";

@@ -71,7 +71,7 @@ Classify each message into exactly one type:
 - project_update: new info/status about a work project
 - task: actionable item with optional due date
 - task_complete: user finished something ("done with X", "mark X complete", "finished the API task")
-- reminder: time-based reminder ("remind me tomorrow", "ask me Friday")
+- reminder: time-based reminder ("remind me tomorrow", "ask me Friday") — NOT status updates like "in uni today until 17"
 - decision: a decision made or recorded
 - question: asking the agent something (status, what to focus on, advice)
 - profile_memory: user teaching you about themselves ("remember", "about me", "I study", "I work on", "for university", "know that I")
@@ -105,6 +105,7 @@ For university-related items use life_domain university. For startup/work projec
 If project is unclear and confidence < 0.7, set needs_clarification true with one short specific question.
 If the user is clarifying a goal, answering your prior question, or continuing the same thread — classify as general, NOT a new project_update.
 Do not create duplicate project_update entries when they're refining what they already said.
+NEVER classify "in uni", "at work", "busy until X" as reminder — those are status/availability (general or general_memory).
 NEVER ask for "more context" when the user sends a time, date, or weekday — treat as reminder scheduling.
 Parse relative dates (tomorrow, next week, Friday, in 2 hours) relative to today. Today is ${today}.
 Use ISO 8601 with timezone offset when time is specified.`;

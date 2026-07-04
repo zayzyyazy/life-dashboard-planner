@@ -6,8 +6,8 @@ import {
   inferDomainFromText,
 } from "./profile.js";
 import { isLifeDomain, type LifeDomain } from "../types/domains.js";
-import { getGitHubContextForBuildContext } from "./github-chat.js";
-import { normalizeDueAt, parseDueDate, formatDueForUser, formatReminderConfirmation, extractReminderContent } from "../agent/parse-due.js";
+import { buildRichContext } from "./context-builder.js";
+import { normalizeDueAt, parseDueDate, formatDueForUser, formatReminderConfirmation, extractReminderContent, looksLikeStatusUpdate } from "../agent/parse-due.js";
 
 export type MessageSource = "dashboard" | "telegram" | "api";
 export type MessageType = "text" | "voice" | "command";
@@ -310,6 +310,22 @@ export async function handleClassification(
     }
 
     case "reminder": {
+      if (looksLikeStatusUpdate(message)) {
+        const domain = /\b(uni|university|campus)\b/i.test(message) ? "university" : "general";
+        addKnowledge({
+          domain: domain as LifeDomain,
+          title: "Status",
+          content: message,
+          source: updateSource,
+        });
+        actions.push("saved_knowledge");
+        return {
+          reply: "",
+          actions,
+          actionContext: `Status/availability (NOT a reminder): ${message}`,
+        };
+      }
+
       const dueAt =
         normalizeDueAt(extracted.due_at) ?? parseDueDate(message) ?? null;
       if (!dueAt) {
@@ -512,105 +528,8 @@ export async function handleClassification(
   }
 }
 
-export async function buildContext(): Promise<string> {
-  const db = getDb();
-  const today = new Date().toISOString().slice(0, 10);
-
-  const projects = db
-    .prepare(
-      `SELECT name, status, updated_at FROM projects WHERE status = 'active' ORDER BY updated_at DESC LIMIT 12`
-    )
-    .all() as { name: string; status: string; updated_at: string }[];
-
-  const tasks = db
-    .prepare(
-      `SELECT t.title, t.status, t.due_date, t.blocked_reason, p.name as project
-       FROM tasks t LEFT JOIN projects p ON p.id = t.project_id
-       WHERE t.status IN ('open', 'blocked')
-       ORDER BY CASE t.status WHEN 'blocked' THEN 0 ELSE 1 END,
-                CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END, t.due_date
-       LIMIT 15`
-    )
-    .all() as {
-    title: string;
-    status: string;
-    due_date: string | null;
-    blocked_reason: string | null;
-    project: string | null;
-  }[];
-
-  const reminders = db
-    .prepare(
-      `SELECT message, due_at FROM reminders
-       WHERE status = 'pending' AND datetime(due_at) >= datetime('now')
-       ORDER BY due_at LIMIT 10`
-    )
-    .all() as { message: string; due_at: string }[];
-
-  const overdueReminders = db
-    .prepare(
-      `SELECT COUNT(*) as c FROM reminders
-       WHERE status = 'pending' AND datetime(due_at) < datetime('now')`
-    )
-    .get() as { c: number };
-
-  const updates = db
-    .prepare(
-      `SELECT p.name, pu.title, pu.content, pu.created_at
-       FROM project_updates pu
-       JOIN projects p ON p.id = pu.project_id
-       WHERE date(pu.created_at) >= date('now', '-3 days')
-       ORDER BY pu.created_at DESC LIMIT 12`
-    )
-    .all() as { name: string; title: string; content: string; created_at: string }[];
-
-  const lines: string[] = [`Today: ${today}`, ""];
-
-  lines.push("### Active projects");
-  if (projects.length === 0) {
-    lines.push("(none)");
-  } else {
-    for (const p of projects) {
-      lines.push(`- ${p.name} (updated ${p.updated_at.slice(0, 10)})`);
-    }
-  }
-
-  lines.push("", "### Open tasks");
-  if (tasks.length === 0) {
-    lines.push("(none)");
-  } else {
-    for (const t of tasks) {
-      const due = t.due_date ? ` · due ${t.due_date.slice(0, 10)}` : "";
-      const proj = t.project ? ` · ${t.project}` : "";
-      const blocked = t.blocked_reason ? ` · BLOCKED: ${t.blocked_reason}` : "";
-      lines.push(`- [${t.status}] ${t.title}${proj}${due}${blocked}`);
-    }
-  }
-
-  lines.push("", "### Upcoming reminders");
-  if (reminders.length === 0) {
-    lines.push(overdueReminders.c > 0 ? `(none upcoming; ${overdueReminders.c} overdue)` : "(none)");
-  } else {
-    for (const r of reminders) {
-      lines.push(`- ${r.message} · ${r.due_at.slice(0, 16).replace("T", " ")}`);
-    }
-  }
-
-  lines.push("", "### Recent project updates (last 3 days)");
-  if (updates.length === 0) {
-    lines.push("(none)");
-  } else {
-    for (const u of updates) {
-      const preview =
-        u.content.length > 120 ? u.content.slice(0, 117) + "…" : u.content;
-      lines.push(`- ${u.name}: ${u.title} — ${preview}`);
-    }
-  }
-
-  const githubSection = await getGitHubContextForBuildContext();
-  lines.push("", githubSection);
-
-  return lines.join("\n");
+export async function buildContext(options: { source?: MessageSource } = {}): Promise<string> {
+  return buildRichContext(options);
 }
 
 function resolveLifeDomain(result: ClassificationResult, message: string): LifeDomain {

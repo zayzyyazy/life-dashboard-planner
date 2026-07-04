@@ -1,6 +1,6 @@
 import type OpenAI from "openai";
 import { classifyMessage, type ClassificationResult } from "../agent/classifier.js";
-import { AGENT_VOICE, actionReplyAddon, telegramVoiceAddon } from "../agent/voice.js";
+import { AGENT_VOICE, actionReplyAddon, telegramVoiceAddon, voiceMessageAddon } from "../agent/voice.js";
 import { config } from "../config.js";
 import { chatCompletion } from "./openai.js";
 import {
@@ -52,11 +52,14 @@ function buildSystemPrompt(
   personal: string,
   context: string,
   replyStyle: ReplyStyle,
-  actionContext?: string
+  options: { actionContext?: string; isVoice?: boolean } = {}
 ): string {
-  const mode = replyStyle === "short" ? `\n\n${telegramVoiceAddon()}` : "";
+  let mode = replyStyle === "short" ? `\n\n${telegramVoiceAddon()}` : "";
+  if (options.isVoice) {
+    mode += `\n\n${voiceMessageAddon()}`;
+  }
 
-  const actionBlock = actionContext ? actionReplyAddon(actionContext) : "";
+  const actionBlock = options.actionContext ? actionReplyAddon(options.actionContext) : "";
 
   return `${AGENT_VOICE}${mode}
 
@@ -90,17 +93,34 @@ function usesPlanningModel(
     classification === "general" ||
     classification === "greeting" ||
     classification === "project_update" ||
-    classification === "decision"
+    classification === "decision" ||
+    classification === "general_memory"
   );
 }
 
-const TELEGRAM_MAX_REPLY = 1200;
+function historyLimit(source: MessageSource, messageType?: MessageType): number {
+  const base = config.chat.historyLimit;
+  if (source === "telegram" && messageType === "voice") {
+    return Math.max(base, 28);
+  }
+  if (source === "telegram") {
+    return Math.max(base, 24);
+  }
+  return base;
+}
+
+function maxReplyLength(source: MessageSource, messageType?: MessageType): number {
+  if (source === "telegram" && messageType === "voice") return 380;
+  if (source === "telegram") return 480;
+  return 4000;
+}
 
 export async function processChat(
   message: string,
   options: ProcessChatOptions = {}
 ): Promise<ChatResult> {
   const source = options.source ?? "api";
+  const messageType = options.messageType ?? "text";
   const replyStyle = options.replyStyle ?? (source === "telegram" ? "short" : "normal");
   const updateSource = source === "telegram" ? "telegram" : "chat";
 
@@ -131,16 +151,14 @@ export async function processChat(
 
   let reply = handled.reply;
   if (!reply) {
-    const context = await buildContext();
+    const context = await buildContext({ source });
     const personal = formatPersonalContextForPrompt();
-    const systemPrompt = buildSystemPrompt(
-      personal,
-      context,
-      replyStyle,
-      handled.actionContext
-    );
+    const systemPrompt = buildSystemPrompt(personal, context, replyStyle, {
+      actionContext: handled.actionContext,
+      isVoice: messageType === "voice",
+    });
 
-    const conversationHistory = getRecentConversation(config.chat.historyLimit, {
+    const conversationHistory = getRecentConversation(historyLimit(source, messageType), {
       excludeLatest: true,
     });
 
@@ -150,10 +168,11 @@ export async function processChat(
         tier: usesPlanningModel(classification.classification, Boolean(handled.actionContext))
           ? "planning"
           : "default",
+        temperature: messageType === "voice" ? 0.4 : 0.5,
       }
     );
 
-    const maxLen = replyStyle === "short" ? TELEGRAM_MAX_REPLY : 4000;
+    const maxLen = maxReplyLength(source, messageType);
     if (reply.length > maxLen) {
       reply = reply.slice(0, maxLen - 1) + "…";
     }

@@ -122,8 +122,8 @@ export const config = {
     staleProjectDays: Number(process.env.STALE_PROJECT_DAYS ?? 5),
   },
   chat: {
-    historyLimit: Number(process.env.CHAT_HISTORY_LIMIT ?? 16),
-    classifierHistoryLimit: Number(process.env.CLASSIFIER_HISTORY_LIMIT ?? 6),
+    historyLimit: Number(process.env.CHAT_HISTORY_LIMIT ?? 24),
+    classifierHistoryLimit: Number(process.env.CLASSIFIER_HISTORY_LIMIT ?? 12),
   },
   security: {
     allowShell: process.env.ALLOW_SHELL === "true",

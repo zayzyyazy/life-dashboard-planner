@@ -11,17 +11,22 @@ export interface DueReminder {
 }
 
 export function getDueReminders(): DueReminder[] {
-  return getDb()
+  const rows = getDb()
     .prepare(
       `SELECT r.id, r.message, r.due_at, p.name as project_name
        FROM reminders r
        LEFT JOIN projects p ON p.id = r.project_id
        WHERE r.status = 'pending'
-         AND datetime(r.due_at) <= datetime('now')
          AND r.notified_at IS NULL
        ORDER BY r.due_at`
     )
     .all() as DueReminder[];
+
+  const now = Date.now();
+  return rows.filter((r) => {
+    const due = new Date(r.due_at).getTime();
+    return !Number.isNaN(due) && due <= now;
+  });
 }
 
 export async function processDueReminders(): Promise<number> {
@@ -32,25 +37,28 @@ export async function processDueReminders(): Promise<number> {
 
   let sent = 0;
   for (const reminder of due) {
-    const text = `Reminder: ${reminder.message}${
-      reminder.project_name ? ` (${reminder.project_name})` : ""
-    }`;
+    const when = new Date(reminder.due_at).toLocaleString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: config.brief.timezone,
+    });
+    const text = `${reminder.message}${reminder.project_name ? ` (${reminder.project_name})` : ""}`;
 
     try {
       if (config.email.to) {
         await sendEmail({
           subject: `Reminder — ${reminder.message.slice(0, 60)}`,
-          text,
+          text: `Reminder: ${text}`,
         });
       }
-      await notifyTelegramUsers(`⏰ ${text}`);
+      await notifyTelegramUsers(`⏰ Reminder (${when}): ${text}`);
       getDb()
         .prepare(
           "UPDATE reminders SET notified_at = datetime('now'), status = 'sent' WHERE id = ?"
         )
         .run(reminder.id);
       sent++;
-      console.log(`[reminders] Sent reminder ${reminder.id}`);
+      console.log(`[reminders] Sent reminder ${reminder.id}: ${text}`);
     } catch (err) {
       console.error(`[reminders] Failed for ${reminder.id}:`, err);
     }
@@ -66,18 +74,23 @@ export interface DueTask {
 }
 
 export function getDueTasks(): DueTask[] {
-  return getDb()
+  const rows = getDb()
     .prepare(
       `SELECT t.id, t.title, t.due_date, p.name as project_name
        FROM tasks t
        LEFT JOIN projects p ON p.id = t.project_id
        WHERE t.status IN ('open', 'blocked')
          AND t.due_date IS NOT NULL
-         AND datetime(t.due_date) <= datetime('now')
          AND t.notified_at IS NULL
        ORDER BY t.due_date`
     )
     .all() as DueTask[];
+
+  const now = Date.now();
+  return rows.filter((t) => {
+    const due = new Date(t.due_date).getTime();
+    return !Number.isNaN(due) && due <= now;
+  });
 }
 
 /** Notify when open tasks pass their due date (separate from explicit reminders). */

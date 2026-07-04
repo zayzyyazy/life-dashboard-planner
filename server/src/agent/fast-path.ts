@@ -5,6 +5,7 @@ import {
   extractReminderContent,
   looksLikeReminder,
   looksLikeReminderComplaint,
+  looksLikeStatusUpdate,
   looksLikeTimeFollowUp,
   parseBareDateTime,
   parseDueDate,
@@ -75,6 +76,24 @@ export function tryFastClassify(
   // Follow-up: "23:36", "Jul 2nd 23:35", "Thursday" after a reminder thread
   const followUp = tryReminderFollowUp(trimmed, recentTurns);
   if (followUp) return followUp;
+
+  // Availability / status — not a reminder
+  if (looksLikeStatusUpdate(trimmed)) {
+    const isUni = /\b(uni|university|campus|school)\b/i.test(trimmed);
+    return {
+      classification: "general_memory",
+      project_name: null,
+      life_domain: isUni ? "university" : "general",
+      confidence: 0.95,
+      extracted: {
+        title: isUni ? "University schedule" : "Status",
+        content: trimmed,
+        life_domain: isUni ? "university" : "general",
+      },
+      needs_clarification: false,
+      clarification_question: null,
+    };
+  }
 
   if (looksLikeReminder(trimmed)) {
     const due_at = parseDueDate(trimmed) ?? undefined;

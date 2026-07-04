@@ -1,7 +1,31 @@
 import { config } from "../config.js";
 
+/** Ensure Date parsing and SQLite time align with user's configured timezone. */
+export function applyProcessTimezone(): void {
+  process.env.TZ = config.brief.timezone;
+}
+
+/** Status/availability — NOT a reminder request. */
+export function looksLikeStatusUpdate(message: string): boolean {
+  const t = message.trim().toLowerCase();
+  if (t.length > 200) return false;
+  if (/^remind\s+me\b/.test(t) || /\bremind\s+me\s+(to|at|in|on)\b/.test(t)) return false;
+  if (/\btask\s*:/.test(t) || /\badd\s+task\b/.test(t)) return false;
+
+  return (
+    /\b(in|at)\s+(uni|university|school|campus|work|office|home|the office)\b/.test(t) ||
+    /\b(busy|free|available|unavailable)\b/.test(t) ||
+    /\buntil\s+\d{1,2}(?::\d{2})?\b/.test(t) ||
+    (/\b(today|tomorrow)\b/.test(t) &&
+      /\b(in|at|until|from|back|done|finished)\b/.test(t) &&
+      !/\b(remind|reminder)\b/.test(t))
+  );
+}
+
 /** Parse natural-language due times — handles in X min, at 23:30, on Thursday, etc. */
 export function parseDueDate(message: string, now = new Date()): string | null {
+  if (looksLikeStatusUpdate(message)) return null;
+
   const text = message.toLowerCase();
 
   const inMin = text.match(/\bin\s+(\d+)\s*(min|mins?|minutes?)\b/);
@@ -34,14 +58,14 @@ export function parseDueDate(message: string, now = new Date()): string | null {
     return at.toISOString();
   }
 
-  if (/\btoday\b/.test(text)) {
+  if (/\btoday\b/.test(text) && /\b(remind|reminder|ping me|notify)\b/.test(text)) {
     const d = new Date(now);
     const at = parseAtTime(message, d);
     return at.toISOString();
   }
 
-  // "at 23:30" without today/tomorrow
-  if (/\bat\s+\d{1,2}/i.test(message)) {
+  // "at 23:30" without today/tomorrow — only when clearly scheduling
+  if (/\b(remind|reminder|ping me|notify)\b/.test(text) && /\bat\s+\d{1,2}/i.test(message)) {
     const d = new Date(now);
     let at = parseAtTime(message, d);
     if (at.getTime() <= now.getTime()) {
@@ -112,6 +136,18 @@ function dateFromMonthDay(
 
 function parseAtTime(message: string, base: Date): Date {
   const d = new Date(base);
+
+  // "until 17" or "until 17:30" when scheduling
+  const untilMatch = message.match(/\buntil\s+(\d{1,2})(?::(\d{2}))?\b/i);
+  if (untilMatch) {
+    let hours = parseInt(untilMatch[1], 10);
+    const minutes = untilMatch[2] ? parseInt(untilMatch[2], 10) : 0;
+    if (hours <= 23) {
+      d.setHours(hours, minutes, 0, 0);
+      return d;
+    }
+  }
+
   const match =
     message.match(/\bat\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i) ||
     message.match(/\b(\d{1,2}):(\d{2})\s*(am|pm)?/i);
@@ -124,7 +160,6 @@ function parseAtTime(message: string, base: Date): Date {
   let hours = parseInt(match[1], 10);
   const minutes = match[2] ? parseInt(match[2], 10) : 0;
   const ampm = match[3]?.toLowerCase();
-  // 24h: 23:30 without am/pm
   if (!ampm && hours <= 23) {
     d.setHours(hours, minutes, 0, 0);
     return d;
@@ -152,7 +187,6 @@ function resolveWeekday(name: string, forceNext: boolean, now: Date): Date {
   let delta = target - current;
   if (delta < 0) delta += 7;
   if (forceNext && delta === 0) delta = 7;
-  // Same weekday (e.g. "Thursday" on Thursday) → today, not next week
   d.setDate(d.getDate() + delta);
   return d;
 }
@@ -199,21 +233,24 @@ export function extractReminderContent(message: string): string {
     .replace(/\b(?:tomorrow|today)\b/gi, "")
     .replace(/\bin\s+\d+\s*(?:min|mins|minute|minutes|hour|hours|hr|hrs)\b/gi, "")
     .replace(/\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?/gi, "")
+    .replace(/\buntil\s+\d{1,2}(?::\d{2})?\b/gi, "")
     .replace(/\b\d{1,2}:\d{2}\b/g, "")
     .replace(/^\s*to\s+/i, "")
     .trim() || message.trim();
 }
 
 export function looksLikeReminder(message: string): boolean {
+  if (looksLikeStatusUpdate(message)) return false;
+
   const t = message.toLowerCase();
-  const hasClock = /\b\d{1,2}:\d{2}\b/.test(t) || /\bat\s+\d{1,2}/.test(t);
+  const hasClock = /\b\d{1,2}:\d{2}\b/.test(t) || /\bat\s+\d{1,2}\b/.test(t);
   const hasWeekday = /\b(?:on\s+)?(?:next\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/.test(t);
   return (
     /^remind\s+me\b/.test(t) ||
     /\bremind\s+me\s+(to|about|at|in|on)\b/.test(t) ||
     (/\b(remind|remember)\b/.test(t) && /\bin\s+\d+\s*min/.test(t)) ||
-    (hasWeekday && hasClock) ||
-    (/\b(call|text|ping)\b/.test(t) && (hasWeekday || hasClock))
+    (hasWeekday && hasClock && /\b(remind|reminder)\b/.test(t)) ||
+    (/\b(call|text|ping)\b/.test(t) && (hasWeekday || hasClock) && /\b(remind|at|on)\b/.test(t))
   );
 }
 

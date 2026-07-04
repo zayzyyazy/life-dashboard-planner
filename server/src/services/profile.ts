@@ -134,6 +134,20 @@ async function applyProfileSeed(forceKnowledge: boolean) {
   }
 }
 
+export function ensureMissingKnowledgeSeed(): number {
+  let added = 0;
+  for (const note of USER_KNOWLEDGE_SEED) {
+    const dup = getDb()
+      .prepare("SELECT id FROM user_knowledge WHERE title = ? AND domain = ?")
+      .get(note.title, note.domain) as { id: number } | undefined;
+    if (!dup) {
+      addKnowledge({ ...note, source: "seed" });
+      added++;
+    }
+  }
+  return added;
+}
+
 export function inferDomainFromText(text: string): LifeDomain {
   const lower = text.toLowerCase();
   if (
@@ -158,7 +172,7 @@ export function inferDomainFromText(text: string): LifeDomain {
 
 export function formatPersonalContextForPrompt(): string {
   const profile = getProfile();
-  const knowledge = listKnowledge().slice(0, 40);
+  const knowledge = listKnowledge().slice(0, 60);
   const lines: string[] = ["## About the user"];
 
   if (profile.name) lines.push(`Name: ${profile.name}`);
