@@ -24,7 +24,8 @@ import {
   shortTranscriptPreview,
   transcribeVoiceFile,
 } from "./voice.js";
-import { registerTelegramNotifier } from "./notify.js";
+import { registerTelegramNotifierSplit } from "./notify.js";
+import { splitMessage } from "./split-message.js";
 
 let bot: TelegramBot | null = null;
 let lastPollingError = "";
@@ -131,7 +132,7 @@ export async function startTelegramBot(): Promise<TelegramBot | null> {
   bot = new TelegramBot(config.telegram.botToken, { polling: true });
   console.log("[telegram] Bot started (polling)");
 
-  registerTelegramNotifier(async (chatId, text) => {
+  registerTelegramNotifierSplit(async (chatId, text) => {
     await bot!.sendMessage(chatId, text);
   });
 
@@ -293,27 +294,10 @@ async function handleVoice(msg: Message) {
 
 async function safeReply(chatId: number, text: string) {
   if (!bot) return;
-  const chunks = splitMessage(text, 4000);
+  const chunks = splitMessage(text, config.telegram.messageChunkSize);
   for (const chunk of chunks) {
     await bot.sendMessage(chatId, chunk);
   }
-}
-
-function splitMessage(text: string, maxLen: number): string[] {
-  if (text.length <= maxLen) return [text];
-  const chunks: string[] = [];
-  let remaining = text;
-  while (remaining.length > 0) {
-    if (remaining.length <= maxLen) {
-      chunks.push(remaining);
-      break;
-    }
-    let splitAt = remaining.lastIndexOf("\n", maxLen);
-    if (splitAt < maxLen * 0.5) splitAt = maxLen;
-    chunks.push(remaining.slice(0, splitAt));
-    remaining = remaining.slice(splitAt).trimStart();
-  }
-  return chunks;
 }
 
 export function stopTelegramBot() {

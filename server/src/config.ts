@@ -137,6 +137,8 @@ export const config = {
     enableVoice: process.env.TELEGRAM_ENABLE_VOICE !== "false",
     enableText: process.env.TELEGRAM_ENABLE_TEXT !== "false",
     enableCommands: process.env.TELEGRAM_ENABLE_COMMANDS !== "false",
+    /** Max chars per Telegram bubble before splitting into the next message */
+    messageChunkSize: Number(process.env.TELEGRAM_MESSAGE_CHUNK_SIZE ?? 900),
   },
 };
 

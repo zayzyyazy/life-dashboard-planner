@@ -109,12 +109,6 @@ function historyLimit(source: MessageSource, messageType?: MessageType): number 
   return base;
 }
 
-function maxReplyLength(source: MessageSource, messageType?: MessageType): number {
-  if (source === "telegram" && messageType === "voice") return 380;
-  if (source === "telegram") return 480;
-  return 4000;
-}
-
 export async function processChat(
   message: string,
   options: ProcessChatOptions = {}
@@ -171,11 +165,6 @@ export async function processChat(
         temperature: messageType === "voice" ? 0.4 : 0.5,
       }
     );
-
-    const maxLen = maxReplyLength(source, messageType);
-    if (reply.length > maxLen) {
-      reply = reply.slice(0, maxLen - 1) + "…";
-    }
   }
 
   saveAgentMessage(

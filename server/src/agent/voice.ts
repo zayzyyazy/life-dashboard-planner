@@ -26,16 +26,11 @@ University student in Germany (CS + Psychology), AI part-time job, builder of ag
 - Do not claim to run shell commands or delete files`;
 
 export function telegramVoiceAddon(): string {
-  return `Telegram text: 2-4 sentences max. Direct. Reference the active thread. No essays.`;
+  return `Telegram text: direct and dense. If you need more than a few sentences, write complete thoughts — long replies will be split across multiple messages automatically. No mid-sentence cutoffs.`;
 }
 
 export function voiceMessageAddon(): string {
-  return `VOICE MESSAGE — critical rules:
-- Max 2-3 sentences. He sent audio, not an essay request.
-- Answer ONLY his latest point from the thread (MCP, verification, Christopher, deploy, etc.)
-- Use specific names and details from Project memory and the conversation thread
-- No "consider designing a layer" generic consulting speak — give ONE concrete take
-- If he's venting or thinking aloud, respond like a sharp colleague, not a textbook`;
+  return `VOICE MESSAGE — answer his latest point from the thread (MCP, verification, Christopher, deploy). Keep it focused (2-4 sentences is fine); longer answers will split across bubbles. Use specific names from Project memory. No generic consulting speak.`;
 }
 
 export function actionReplyAddon(actionContext: string): string {
