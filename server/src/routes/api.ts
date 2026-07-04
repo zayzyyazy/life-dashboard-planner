@@ -1,4 +1,5 @@
 import { getEnvStatus } from "../config.js";
+import { getAgentKnowledgeStatus } from "../services/agent-knowledge.js";
 import { Router } from "express";
 import { processChat, processCapture } from "../services/chat.js";
 import { addWatchedRepo, checkRepo, listWatchedRepos, getGitHubStatus } from "../services/github.js";
@@ -168,5 +169,14 @@ router.get("/messages", (_req, res) => {
 });
 
 router.get("/health", (_req, res) => {
-  res.json({ status: "ok", time: new Date().toISOString(), env: getEnvStatus() });
+  res.json({
+    status: "ok",
+    time: new Date().toISOString(),
+    env: getEnvStatus(),
+    agent_knowledge: getAgentKnowledgeStatus(),
+  });
+});
+
+router.get("/agent/knowledge", (_req, res) => {
+  res.json(getAgentKnowledgeStatus());
 });

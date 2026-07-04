@@ -4,6 +4,8 @@ import { syncUserRepos, getGitHubUser } from "./services/github.js";
 import { bootGitHub } from "./services/github-context.js";
 import { enableReminders } from "./services/reminders.js";
 import { seedProfileIfEmpty } from "./services/profile.js";
+import { seedProjectKnowledgeIfEmpty } from "./services/agent-knowledge.js";
+import { ensureBootProfile } from "./db/boot-settings.js";
 
 export async function runSetup(): Promise<void> {
   console.log("[setup] Running Life Planner Agent setup…");
@@ -49,9 +51,17 @@ export async function runSetup(): Promise<void> {
 
   setSetting("setup_complete", "true");
   setSetting("setup_at", new Date().toISOString());
+
+  const projectSeeded = seedProjectKnowledgeIfEmpty();
+  if (projectSeeded > 0) {
+    console.log(`[setup] Seeded ${projectSeeded} project knowledge entries (Marie/MCP/etc.)`);
+  }
+
   console.log("[setup] Done. Run npm run dev to start.");
 }
 
 export async function runBootTasks(): Promise<void> {
+  await ensureBootProfile();
+  seedProjectKnowledgeIfEmpty();
   await bootGitHub();
 }

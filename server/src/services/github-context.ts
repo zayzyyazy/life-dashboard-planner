@@ -98,6 +98,11 @@ function formatSnapshotsForPrompt(snapshots: RepoSnapshot[]): string {
         lines.push(`  Open PRs: ${s.open_prs.map((p) => `#${p.number} ${p.title}`).join("; ")}`);
       }
 
+      if (s.readme_excerpt) {
+        const excerpt = s.readme_excerpt.replace(/\s+/g, " ").slice(0, 400);
+        lines.push(`  README: ${excerpt}…`);
+      }
+
       if (s.open_issues.length > 0) {
         lines.push(
           `  Open issues: ${s.open_issues.map((i) => `#${i.number} ${i.title}`).join("; ")}`

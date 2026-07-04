@@ -26,6 +26,7 @@
     "docker:up": "docker compose up -d --build",
     "docker:logs": "docker compose logs -f",
     "check-env": "node scripts/check-env.mjs",
+    "check:knowledge": "node scripts/check-knowledge.mjs",
     "test:telegram": "node scripts/test-telegram.mjs",
     "test:github": "node scripts/test-github.mjs",
     "test:reminder": "node scripts/test-reminder.mjs",

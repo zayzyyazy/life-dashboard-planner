@@ -3,6 +3,10 @@ import { getDb } from "../db/index.js";
 import { generateDailyBrief } from "../services/brief.js";
 import { processChat } from "../services/chat.js";
 import { addWatchedRepo, checkRepo } from "../services/github.js";
+import {
+  formatKnowledgeStatusForUser,
+  getAgentKnowledgeStatus,
+} from "../services/agent-knowledge.js";
 import { getProfile, listKnowledge, domainLabel } from "../services/profile.js";
 
 export function isAuthorized(userId: number): boolean {
@@ -43,6 +47,7 @@ Commands:
 /tasks — open tasks
 /reminders — upcoming reminders
 /profile — what I know about you
+/knowledge — what data I have loaded (repos, projects, memory)
 /watchrepo <url> — watch a GitHub repo
 /help — this message`;
 
@@ -141,6 +146,11 @@ export function handleRemindersCommand(): string {
   return reminders
     .map((r) => `• ${r.message} — ${new Date(r.due_at).toLocaleString()}`)
     .join("\n");
+}
+
+export function handleKnowledgeCommand(): string {
+  const status = getAgentKnowledgeStatus();
+  return formatKnowledgeStatusForUser(status);
 }
 
 export function handleProfileCommand(): string {

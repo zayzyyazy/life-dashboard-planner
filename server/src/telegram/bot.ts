@@ -4,6 +4,7 @@ import { getLastTelegramMessageAt } from "../services/memory.js";
 import {
   handleBriefCommand,
   handleProfileCommand,
+  handleKnowledgeCommand,
   handleProjectsCommand,
   handleRemindersCommand,
   handleTasksCommand,
@@ -232,6 +233,9 @@ async function handleCommand(msg: Message) {
       break;
     case "/profile":
       reply = handleProfileCommand();
+      break;
+    case "/knowledge":
+      reply = handleKnowledgeCommand();
       break;
     case "/tasks":
       reply = handleTasksCommand();

@@ -34,6 +34,7 @@ export interface RepoSnapshot {
   recent_commits: { sha: string; message: string; date: string; author: string }[];
   open_issues: { number: number; title: string; updated_at: string }[];
   open_prs: { number: number; title: string; updated_at: string }[];
+  readme_excerpt: string | null;
 }
 
 let connectionCache: { status: GitHubConnectionStatus; at: number } | null = null;
@@ -168,8 +169,24 @@ export async function getGitHubUser(): Promise<{ login: string } | null> {
   return { login: status.login };
 }
 
+export async function fetchRepoReadme(owner: string, repo: string): Promise<string | null> {
+  try {
+    const data = (await githubFetch(`/repos/${owner}/${repo}/readme`)) as {
+      content?: string;
+      encoding?: string;
+    };
+    if (!data.content) return null;
+    const raw = Buffer.from(data.content, data.encoding === "base64" ? "base64" : "utf8").toString(
+      "utf8"
+    );
+    return raw.slice(0, 1200);
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchRepoSnapshot(owner: string, repo: string): Promise<RepoSnapshot> {
-  const [meta, commits, issuesRaw, prs] = await Promise.all([
+  const [meta, commits, issuesRaw, prs, readme] = await Promise.all([
     githubFetch(`/repos/${owner}/${repo}`) as Promise<{
       html_url: string;
       default_branch: string;
@@ -190,6 +207,7 @@ export async function fetchRepoSnapshot(owner: string, repo: string): Promise<Re
     githubFetch(
       `/repos/${owner}/${repo}/pulls?state=open&per_page=5&sort=updated`
     ) as Promise<{ number: number; title: string; updated_at: string }[]>,
+    fetchRepoReadme(owner, repo),
   ]);
 
   const open_issues = issuesRaw
@@ -216,6 +234,7 @@ export async function fetchRepoSnapshot(owner: string, repo: string): Promise<Re
       title: p.title,
       updated_at: p.updated_at,
     })),
+    readme_excerpt: readme,
   };
 }
 
@@ -284,6 +303,26 @@ export function getGitHubStatus() {
   };
 }
 
+function formatRepoBaseline(
+  owner: string,
+  repo: string,
+  commits: { commit: { message: string; author: { date: string } } }[],
+  issues: { title: string; number: number }[],
+  prs: { title: string; number: number }[]
+): string {
+  const lines = [`Watching ${owner}/${repo}.`];
+  if (commits[0]) {
+    lines.push(`Latest commit: ${commits[0].commit.message.split("\n")[0]}`);
+  }
+  if (prs.length > 0) {
+    lines.push(`Open PRs: ${prs.map((p) => `#${p.number} ${p.title}`).join("; ")}`);
+  }
+  if (issues.length > 0) {
+    lines.push(`Open issues: ${issues.map((i) => `#${i.number} ${i.title}`).join("; ")}`);
+  }
+  return lines.join("\n");
+}
+
 export async function checkRepo(repoId: number): Promise<string | null> {
   const db = getDb();
   const row = db
@@ -323,7 +362,20 @@ export async function checkRepo(repoId: number): Promise<string | null> {
   ).run(latestSha, repoId);
 
   if (isFirstCheck) {
-    return `Now watching ${row.owner}/${row.repo}. Latest commit: ${commits[0]?.commit.message ?? "none"}`;
+    const baseline = formatRepoBaseline(row.owner, row.repo, commits, issues, prs);
+    if (projectId) {
+      db.prepare(
+        "INSERT INTO project_updates (project_id, source, title, content, metadata) VALUES (?, ?, ?, ?, ?)"
+      ).run(
+        projectId,
+        "github",
+        `Baseline: ${row.owner}/${row.repo}`,
+        baseline,
+        JSON.stringify({ latest_sha: latestSha, baseline: true })
+      );
+      db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(projectId);
+    }
+    return `Now watching ${row.owner}/${row.repo}. Baseline saved.`;
   }
 
   if (!hasNewCommits && issues.length === 0 && prs.length === 0) {

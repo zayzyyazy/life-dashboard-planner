@@ -198,7 +198,7 @@ export function formatPersonalContextForPrompt(): string {
   for (const [domain, entries] of byDomain) {
     if (entries.length === 0) continue;
     lines.push(`\n### ${domainLabel(domain)} knowledge`);
-    for (const e of entries.slice(0, 12)) {
+    for (const e of entries.slice(0, 20)) {
       lines.push(`- ${e.title}: ${e.content}`);
     }
   }
@@ -212,8 +212,25 @@ export function formatPersonalContextForPrompt(): string {
 
 export function getProjectListForClassifier(): string {
   const db = getDb();
-  const projects = db.prepare("SELECT name FROM projects ORDER BY name").all() as {
-    name: string;
-  }[];
-  return projects.map((p) => `- ${p.name}`).join("\n");
+  const projects = db
+    .prepare("SELECT id, name, description FROM projects WHERE status = 'active' ORDER BY name")
+    .all() as { id: number; name: string; description: string | null }[];
+
+  const watched = db
+    .prepare(
+      `SELECT wr.owner, wr.repo, p.name as project_name
+       FROM watched_repos wr LEFT JOIN projects p ON p.id = wr.project_id`
+    )
+    .all() as { owner: string; repo: string; project_name: string | null }[];
+
+  return projects
+    .map((p) => {
+      const repos = watched
+        .filter((w) => w.project_name === p.name)
+        .map((w) => `${w.owner}/${w.repo}`);
+      const repoNote = repos.length ? ` [repos: ${repos.join(", ")}]` : "";
+      const desc = p.description ? ` — ${p.description.slice(0, 80)}` : "";
+      return `- ${p.name}${desc}${repoNote}`;
+    })
+    .join("\n");
 }
