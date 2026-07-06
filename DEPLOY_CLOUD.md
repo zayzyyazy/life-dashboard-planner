@@ -50,7 +50,8 @@ launchctl unload ~/Library/LaunchAgents/com.lifeplanner.agent.plist 2>/dev/null
    - `EVENING_CHECKIN_ENABLED=false`
    - `STALE_PROJECT_NUDGE_ENABLED=false`
    - `VAULT_GIT_SYNC=true` (optional — sync vault to GitHub)
-   - `VAULT_GIT_REMOTE=https://github.com/YOU/brain-vault.git`
+   - `VAULT_GIT_REMOTE=https://YOUR_GITHUB_TOKEN@github.com/YOU/brain-vault.git`
+     (token must have `repo` scope — the server uses it to pull/push the private vault repo)
 5. **Volumes** → Add volume → mount at `/app/data` (keeps SQLite + memory)
 6. Deploy — Railway builds the Dockerfile automatically
 7. **Settings → Networking → Generate domain** — open `https://your-app.up.railway.app`
