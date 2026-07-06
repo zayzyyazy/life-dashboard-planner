@@ -92,7 +92,9 @@ export function buildProjectMemoryContext(): string {
   return lines.join("\n").trim();
 }
 
-export async function buildRichContext(_options: { source?: ContextSource } = {}): Promise<string> {
+export async function buildRichContext(
+  _options: { source?: ContextSource; vaultExcerpt?: string | null } = {}
+): Promise<string> {
   const db = getDb();
   const today = new Date().toISOString().slice(0, 10);
 
@@ -185,6 +187,11 @@ export async function buildRichContext(_options: { source?: ContextSource } = {}
     for (const k of knowledge) {
       lines.push(`- [${k.domain}] ${k.title}: ${k.content.slice(0, 400)}`);
     }
+  }
+
+  if (_options.vaultExcerpt?.trim()) {
+    lines.push("", "### Obsidian vault memory (from your notes)");
+    lines.push(_options.vaultExcerpt.trim());
   }
 
   const githubSection = await getGitHubContextForBuildContext();

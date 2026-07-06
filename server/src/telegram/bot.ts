@@ -12,6 +12,9 @@ import {
   handleVoiceTranscript,
   handleGitHubCommand,
   handleWatchRepoCommand,
+  handleVaultCommand,
+  handleSearchCommand,
+  handleAskCommand,
   HELP_MESSAGE,
   isAuthorized,
   logBlockedUser,
@@ -132,6 +135,26 @@ export async function startTelegramBot(): Promise<TelegramBot | null> {
   bot = new TelegramBot(config.telegram.botToken, { polling: true });
   console.log("[telegram] Bot started (polling)");
 
+  // Register command menu so Telegram's "/" popup shows current commands
+  bot
+    .setMyCommands([
+      { command: "vault", description: "Obsidian vault stats" },
+      { command: "search", description: "Search your notes" },
+      { command: "ask", description: "Ask over your notes" },
+      { command: "brief", description: "Today's brief" },
+      { command: "tasks", description: "Open tasks" },
+      { command: "reminders", description: "Upcoming reminders" },
+      { command: "projects", description: "Saved projects" },
+      { command: "github", description: "Live GitHub activity" },
+      { command: "profile", description: "What I know about you" },
+      { command: "knowledge", description: "Loaded data summary" },
+      { command: "help", description: "Examples and commands" },
+    ])
+    .then(() => console.log("[telegram] Command menu registered"))
+    .catch((err: unknown) =>
+      console.warn("[telegram] setMyCommands failed:", err instanceof Error ? err.message : err)
+    );
+
   registerTelegramNotifierSplit(async (chatId, text) => {
     await bot!.sendMessage(chatId, text);
   });
@@ -249,6 +272,15 @@ async function handleCommand(msg: Message) {
       break;
     case "/github":
       reply = await handleGitHubCommand();
+      break;
+    case "/vault":
+      reply = await handleVaultCommand();
+      break;
+    case "/search":
+      reply = await handleSearchCommand(args);
+      break;
+    case "/ask":
+      reply = await handleAskCommand(args);
       break;
     default:
       reply = "Unknown command. Try /help";

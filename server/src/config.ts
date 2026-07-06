@@ -107,7 +107,7 @@ export const config = {
     checkCron: process.env.REMINDER_CHECK_CRON ?? "*/1 * * * *",
   },
   idleNudge: {
-    enabled: process.env.IDLE_NUDGE_ENABLED !== "false",
+    enabled: process.env.IDLE_NUDGE_ENABLED === "true",
     idleHours: Number(process.env.IDLE_NUDGE_HOURS ?? 2),
     cooldownHours: Number(process.env.IDLE_NUDGE_COOLDOWN_HOURS ?? 4),
     checkCron: process.env.IDLE_NUDGE_CHECK_CRON ?? "*/15 * * * *",
@@ -115,9 +115,9 @@ export const config = {
   proactive: {
     morningEnabled: process.env.MORNING_OUTREACH_ENABLED !== "false",
     morningCron: process.env.MORNING_OUTREACH_CRON ?? "0 8 * * *",
-    eveningEnabled: process.env.EVENING_CHECKIN_ENABLED !== "false",
+    eveningEnabled: process.env.EVENING_CHECKIN_ENABLED === "true",
     eveningCron: process.env.EVENING_CHECKIN_CRON ?? "0 20 * * *",
-    staleNudgeEnabled: process.env.STALE_PROJECT_NUDGE_ENABLED !== "false",
+    staleNudgeEnabled: process.env.STALE_PROJECT_NUDGE_ENABLED === "true",
     staleNudgeCron: process.env.STALE_PROJECT_NUDGE_CRON ?? "0 14 * * *",
     staleProjectDays: Number(process.env.STALE_PROJECT_DAYS ?? 5),
   },
@@ -139,6 +139,16 @@ export const config = {
     enableCommands: process.env.TELEGRAM_ENABLE_COMMANDS !== "false",
     /** Max chars per Telegram bubble before splitting into the next message */
     messageChunkSize: Number(process.env.TELEGRAM_MESSAGE_CHUNK_SIZE ?? 900),
+  },
+  vault: {
+    path:
+      process.env.VAULT_PATH ??
+      path.join(process.env.DATA_DIR ?? path.join(projectRoot, "data"), "Brain-Vault"),
+    brainDataDir:
+      process.env.BRAIN_DATA_DIR ??
+      path.join(process.env.DATA_DIR ?? path.join(projectRoot, "data"), "brain"),
+    gitSyncEnabled: process.env.VAULT_GIT_SYNC === "true",
+    gitRemote: cleanEnv(process.env.VAULT_GIT_REMOTE),
   },
 };
 

@@ -7,12 +7,14 @@ Your Mac can be off. The agent runs on an **always-on server** in the cloud (~$5
 | Feature | Cloud |
 |---------|-------|
 | Telegram (text + voice) | ✅ |
+| Obsidian vault (search, capture, save) | ✅ on volume |
 | GitHub repo watching | ✅ |
 | Daily briefs (email + Telegram) | ✅ |
 | Reminders (email + Telegram) | ✅ |
 | Project memory / chat | ✅ |
 | Dashboard (browser) | ✅ public URL |
 | **Local Mac folder watching** | ❌ paths don't exist on server |
+| **Obsidian live sync** | via git pull on Mac |
 
 ---
 
@@ -40,8 +42,15 @@ launchctl unload ~/Library/LaunchAgents/com.lifeplanner.agent.plist 2>/dev/null
    - `TELEGRAM_ALLOWED_USER_IDS`
    - `GITHUB_TOKEN`
    - `EMAIL_FROM`, `EMAIL_TO`, `SMTP_PASS` (or Resend)
-   - `TZ=America/New_York` (or your timezone)
+   - `TZ=Europe/Berlin` (or your timezone)
    - `DATA_DIR=/app/data`
+   - `VAULT_PATH=/app/data/Brain-Vault`
+   - `BRAIN_DATA_DIR=/app/data/brain`
+   - `IDLE_NUDGE_ENABLED=false`
+   - `EVENING_CHECKIN_ENABLED=false`
+   - `STALE_PROJECT_NUDGE_ENABLED=false`
+   - `VAULT_GIT_SYNC=true` (optional — sync vault to GitHub)
+   - `VAULT_GIT_REMOTE=https://github.com/YOU/brain-vault.git`
 5. **Volumes** → Add volume → mount at `/app/data` (keeps SQLite + memory)
 6. Deploy — Railway builds the Dockerfile automatically
 7. **Settings → Networking → Generate domain** — open `https://your-app.up.railway.app`
@@ -53,6 +62,39 @@ curl https://your-app.up.railway.app/health
 ```
 
 Telegram works immediately — no Mac needed.
+
+---
+
+## Obsidian vault sync (Mac ↔ cloud)
+
+The vault lives on the cloud volume at `/app/data/Brain-Vault`. Obsidian on your Mac syncs via **git**.
+
+### One-time setup on Mac
+
+```bash
+# 1. Create a PRIVATE GitHub repo (empty) — e.g. brain-vault
+
+# 2. Init git in your local vault and push
+bash scripts/init-brain-vault-git.sh https://github.com/YOU/brain-vault.git
+cd ~/Documents/Brain-Vault
+git push -u origin main
+
+# 3. Add Railway env vars (see above):
+#    VAULT_GIT_SYNC=true
+#    VAULT_GIT_REMOTE=https://github.com/YOU/brain-vault.git
+```
+
+### Daily sync on Mac
+
+After Telegram saves notes on cloud:
+
+```bash
+cd ~/Documents/Brain-Vault && git pull
+```
+
+Or install the **Obsidian Git** plugin → pull on vault open.
+
+Cloud auto-commits and pushes after each Obsidian save when `VAULT_GIT_SYNC=true`.
 
 ---
 

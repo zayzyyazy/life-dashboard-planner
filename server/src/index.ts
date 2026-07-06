@@ -16,6 +16,11 @@ import { profileRouter } from "./routes/profile.js";
 import { startScheduler } from "./services/scheduler.js";
 import { runBootTasks } from "./setup.js";
 import { startTelegramBot } from "./telegram/bot.js";
+import {
+  bootstrapVaultIfEmpty,
+  initObsidianBrain,
+  reindexVault,
+} from "./services/obsidian-brain.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "../..");
@@ -139,6 +144,10 @@ app.listen(config.port, host, () => {
     console.warn("WARNING: OPENAI_API_KEY not set — chat will fail until configured");
   }
   // Telegram before scheduler — a bad TZ must not prevent the bot from starting
+  void bootstrapVaultIfEmpty()
+    .then(() => initObsidianBrain())
+    .then(() => reindexVault())
+    .catch((err) => console.error("[obsidian] Startup:", err));
   startTelegramBot().catch((err) => console.error("[telegram] Failed to start:", err));
   startScheduler();
   runBootTasks().catch(console.error);

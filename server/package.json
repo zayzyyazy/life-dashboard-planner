@@ -23,6 +23,7 @@
     "node-cron": "^3.0.3",
     "node-telegram-bot-api": "^1.1.2",
     "nodemailer": "^6.10.0",
+    "obisidan-plug": "file:../packages/obisidan-plug",
     "openai": "^4.77.0"
   },
   "devDependencies": {

@@ -14,6 +14,13 @@ import {
   type ReplyStyle,
 } from "./memory.js";
 import { formatPersonalContextForPrompt } from "./profile.js";
+import { askBrain } from "./obsidian-brain.js";
+import {
+  OBSIDIAN_SAVE_OFFER_ACTIONS,
+  offerObsidianSave,
+  tryHandleObsidianPending,
+} from "./obsidian-save.js";
+import { tryVaultFastPath } from "./vault-fast-path.js";
 
 export interface ChatResult {
   reply: string;
@@ -109,6 +116,18 @@ function historyLimit(source: MessageSource, messageType?: MessageType): number 
   return base;
 }
 
+function stubClassification(kind: string): ClassificationResult {
+  return {
+    classification: kind as ClassificationResult["classification"],
+    project_name: null,
+    life_domain: null,
+    confidence: 1,
+    extracted: {},
+    needs_clarification: false,
+    clarification_question: null,
+  };
+}
+
 export async function processChat(
   message: string,
   options: ProcessChatOptions = {}
@@ -117,13 +136,6 @@ export async function processChat(
   const messageType = options.messageType ?? "text";
   const replyStyle = options.replyStyle ?? (source === "telegram" ? "short" : "normal");
   const updateSource = source === "telegram" ? "telegram" : "chat";
-
-  const historyBefore = getRecentConversation(config.chat.classifierHistoryLimit, {
-    excludeLatest: false,
-  });
-  if (options.replyToText?.trim()) {
-    historyBefore.push({ role: "user", content: options.replyToText.trim() });
-  }
 
   if (!options.skipUserSave) {
     saveAgentMessage(
@@ -136,6 +148,47 @@ export async function processChat(
     );
   }
 
+  // Pending Obsidian save confirmation (yes / no / edit)
+  const pendingReply = await tryHandleObsidianPending(message);
+  if (pendingReply !== null) {
+    saveAgentMessage(
+      messageInput(options, {
+        role: "assistant",
+        content: pendingReply,
+        classification: "general",
+      })
+    );
+    return {
+      reply: pendingReply,
+      classification: stubClassification("general"),
+      actions: ["obsidian_save_handled"],
+    };
+  }
+
+  // Vault-specific fast paths (search, save:, ask)
+  const vaultFast = await tryVaultFastPath(message);
+  if (vaultFast?.handled) {
+    saveAgentMessage(
+      messageInput(options, {
+        role: "assistant",
+        content: vaultFast.reply,
+        classification: "general",
+      })
+    );
+    return {
+      reply: vaultFast.reply,
+      classification: stubClassification("general"),
+      actions: ["vault_fast_path"],
+    };
+  }
+
+  const historyBefore = getRecentConversation(config.chat.classifierHistoryLimit, {
+    excludeLatest: true,
+  });
+  if (options.replyToText?.trim()) {
+    historyBefore.push({ role: "user", content: options.replyToText.trim() });
+  }
+
   const today = new Date().toISOString().slice(0, 10);
   const classification = await classifyMessage(message, today, historyBefore);
   const handled = await handleClassification(message, classification, {
@@ -144,8 +197,18 @@ export async function processChat(
   });
 
   let reply = handled.reply;
+  let vaultExcerpt: string | null = null;
+
+  if (classification.classification === "question" && config.openai.apiKey) {
+    try {
+      vaultExcerpt = await askBrain(message);
+    } catch (err) {
+      console.warn("[obsidian] askBrain failed:", err);
+    }
+  }
+
   if (!reply) {
-    const context = await buildContext({ source });
+    const context = await buildContext({ source, vaultExcerpt });
     const personal = formatPersonalContextForPrompt();
     const systemPrompt = buildSystemPrompt(personal, context, replyStyle, {
       actionContext: handled.actionContext,
@@ -165,6 +228,15 @@ export async function processChat(
         temperature: messageType === "voice" ? 0.4 : 0.5,
       }
     );
+  }
+
+  // Offer Obsidian save after meaningful actions
+  const shouldOfferSave = handled.actions.some((a) => OBSIDIAN_SAVE_OFFER_ACTIONS.has(a));
+  if (shouldOfferSave && handled.actionContext) {
+    const offer = await offerObsidianSave(handled.actionContext);
+    if (offer) {
+      reply = reply ? `${reply}\n\n${offer.offerLine}` : offer.offerLine;
+    }
   }
 
   saveAgentMessage(

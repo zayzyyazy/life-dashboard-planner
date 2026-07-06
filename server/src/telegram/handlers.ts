@@ -7,6 +7,12 @@ import {
   formatKnowledgeStatusForUser,
   getAgentKnowledgeStatus,
 } from "../services/agent-knowledge.js";
+import {
+  askBrain,
+  formatSearchResults,
+  getVaultStatus,
+  searchVault,
+} from "../services/obsidian-brain.js";
 import { getProfile, listKnowledge, domainLabel } from "../services/profile.js";
 
 export function isAuthorized(userId: number): boolean {
@@ -30,24 +36,27 @@ export function logUnknownUser(chatId: number, userId: number, username?: string
 }
 
 export const START_MESSAGE =
-  "Hey — I'm your Life Planner Agent. I know your projects, tasks, and schedule. Text or voice me anytime — I'll actually follow up, not just list commands.";
+  "Hey — I'm your second brain. I track tasks, reminders, projects, and your Obsidian notes. Text or voice me anytime.";
 
 export const HELP_MESSAGE = `Examples:
-• What should I focus on today?
-• Mark Marie API task done / finished the CRM integration
-• For university: algorithms assignment due Friday
+• What did I write about my exam plan?
+• save: messy thought about Marie CRM fix
 • Add this to Marie: Marc fixed the phone path
 • Remind me tomorrow to ask Chris about CRM endpoints
 • Task: deploy MCP server by Thursday
+• yes / no — confirm Obsidian save
 
 Commands:
+/vault — Obsidian vault stats
+/search <query> — search your notes
+/ask <question> — ask over your notes
 /brief — today's brief
-/github — live GitHub activity across your repos
+/github — live GitHub activity
 /projects — saved projects
 /tasks — open tasks
 /reminders — upcoming reminders
 /profile — what I know about you
-/knowledge — what data I have loaded (repos, projects, memory)
+/knowledge — loaded data summary
 /watchrepo <url> — watch a GitHub repo
 /help — this message`;
 
@@ -196,4 +205,37 @@ export async function handleGitHubCommand(): Promise<string> {
   return answerGitHubQuestion("What's happening across my GitHub repos right now?", {
     short: true,
   });
+}
+
+export async function handleVaultCommand(): Promise<string> {
+  try {
+    const status = await getVaultStatus();
+    return [
+      `Vault: ${status.vaultPath}`,
+      `Notes: ${status.noteCount}`,
+      `Pending saves: ${status.pendingPreviews}`,
+      `AI: ${status.aiProvider}`,
+    ].join("\n");
+  } catch (err) {
+    return `Vault unavailable: ${err instanceof Error ? err.message : "unknown"}`;
+  }
+}
+
+export async function handleSearchCommand(query: string): Promise<string> {
+  if (!query.trim()) return "Usage: /search algorithms exam";
+  try {
+    const hits = await searchVault(query.trim(), 8);
+    return formatSearchResults(hits);
+  } catch (err) {
+    return `Search failed: ${err instanceof Error ? err.message : "unknown"}`;
+  }
+}
+
+export async function handleAskCommand(question: string): Promise<string> {
+  if (!question.trim()) return "Usage: /ask what did I write about my exam plan?";
+  try {
+    return await askBrain(question.trim());
+  } catch (err) {
+    return `Ask failed: ${err instanceof Error ? err.message : "unknown"}`;
+  }
 }

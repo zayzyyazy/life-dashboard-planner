@@ -528,7 +528,7 @@ export async function handleClassification(
   }
 }
 
-export async function buildContext(options: { source?: MessageSource } = {}): Promise<string> {
+export async function buildContext(options: { source?: MessageSource; vaultExcerpt?: string | null } = {}): Promise<string> {
   return buildRichContext(options);
 }
 
