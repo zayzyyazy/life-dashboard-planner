@@ -13,19 +13,21 @@ fi
 
 VAULT="${VAULT_PATH:-/app/data/Brain-Vault}"
 
-# First boot with git sync: clone the existing vault from the remote
-if [ "${VAULT_GIT_SYNC:-false}" = "true" ] && [ -n "${VAULT_GIT_REMOTE:-}" ] && [ ! -d "$VAULT/.git" ]; then
-  if [ ! -f "$VAULT/BRAIN.md" ]; then
-    echo "[entrypoint] Cloning Brain-Vault from remote…"
-    rm -rf "$VAULT" && git clone "$VAULT_GIT_REMOTE" "$VAULT" || mkdir -p "$VAULT"
-  fi
+# Git sync FIRST — clone GitHub vault before bootstrap so cloud and Mac share one repo
+if [ "${VAULT_GIT_SYNC:-false}" = "true" ] && [ -n "${VAULT_GIT_REMOTE:-}" ]; then
   if [ ! -d "$VAULT/.git" ]; then
-    echo "[entrypoint] Clone failed or vault pre-existing — initializing git repo…"
-    git -C "$VAULT" init -b main
+    echo "[entrypoint] Cloning Brain-Vault from GitHub…"
+    rm -rf "$VAULT"
+    if git clone "$VAULT_GIT_REMOTE" "$VAULT"; then
+      echo "[entrypoint] Clone OK"
+    else
+      echo "[entrypoint] Clone failed — will bootstrap empty vault (fix VAULT_GIT_REMOTE token)"
+      mkdir -p "$VAULT"
+    fi
   fi
 fi
 
-# Bootstrap Obsidian vault if still empty (no git sync, or clone failed)
+# Bootstrap only if clone did not provide a vault
 if [ ! -f "$VAULT/BRAIN.md" ]; then
   echo "[entrypoint] Bootstrapping Brain-Vault…"
   VAULT_PATH="$VAULT" \
@@ -33,17 +35,20 @@ if [ ! -f "$VAULT/BRAIN.md" ]; then
   npm run bootstrap-vault --prefix packages/obisidan-plug || true
 fi
 
-# Configure vault git for auto-commit/push
-if [ "${VAULT_GIT_SYNC:-false}" = "true" ] && [ -n "${VAULT_GIT_REMOTE:-}" ] && [ -d "$VAULT/.git" ]; then
-  # Keep remote URL in sync with env (allows rotating the token)
+# Configure vault git for auto-commit/push (runtime also repairs via ensureVaultGitRepo)
+if [ "${VAULT_GIT_SYNC:-false}" = "true" ] && [ -n "${VAULT_GIT_REMOTE:-}" ]; then
+  if [ ! -d "$VAULT/.git" ]; then
+    git -C "$VAULT" init -b main 2>/dev/null || git -C "$VAULT" init
+    git -C "$VAULT" add -A
+    git -C "$VAULT" commit -m "brain: cloud bootstrap @ $(date -u +%Y-%m-%dT%H:%M:%SZ)" 2>/dev/null || true
+  fi
   git -C "$VAULT" remote remove origin 2>/dev/null || true
   git -C "$VAULT" remote add origin "$VAULT_GIT_REMOTE"
-  # Git identity so auto-commits work in the container
   git -C "$VAULT" config user.name "Brain Agent"
   git -C "$VAULT" config user.email "brain-agent@localhost"
-  # Pull latest from remote on startup (best-effort)
-  git -C "$VAULT" pull origin main --rebase 2>/dev/null || \
-  git -C "$VAULT" pull origin master --rebase 2>/dev/null || true
+  git -C "$VAULT" pull origin main --rebase --autostash 2>/dev/null || \
+  git -C "$VAULT" pull origin main --allow-unrelated-histories --no-edit 2>/dev/null || \
+  git -C "$VAULT" pull origin master --rebase --autostash 2>/dev/null || true
 fi
 
 echo "[entrypoint] Starting Life Planner Agent on port ${PORT:-3847}…"

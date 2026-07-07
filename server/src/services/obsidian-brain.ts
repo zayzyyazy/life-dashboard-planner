@@ -1,11 +1,13 @@
 /**
  * Obsidian vault integration — wraps obisidan-plug brain service.
  */
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { config } from "../config.js";
-
-const execFileAsync = promisify(execFile);
+import {
+  ensureVaultGitRepo,
+  getVaultGitStatus,
+  syncVaultToGit,
+  type SyncResult,
+} from "./vault-git.js";
 
 let brainModule: typeof import("obisidan-plug") | null = null;
 let initPromise: Promise<void> | null = null;
@@ -30,17 +32,31 @@ async function getBrain() {
   return brainModule;
 }
 
+export { getVaultGitStatus, syncVaultToGit };
+export type { SyncResult };
+
 export async function initObsidianBrain(): Promise<void> {
   if (initPromise) return initPromise;
   initPromise = (async () => {
     try {
       ensureVaultEnv();
+      await ensureVaultGitRepo().catch((err) => {
+        console.error("[obsidian] Vault git repair:", err instanceof Error ? err.message : err);
+      });
+
       const brain = await getBrain();
       await brain.initBrain();
       const status = await brain.getVaultStatus();
+      const git = getVaultGitStatus();
       console.log(
-        `[obsidian] Vault ready: ${status.noteCount} notes at ${status.vaultPath}`
+        `[obsidian] Vault ready: ${status.noteCount} notes at ${status.vaultPath}` +
+          (git.enabled
+            ? git.hasRemote
+              ? " (git sync ON)"
+              : " (git sync ON but VAULT_GIT_REMOTE missing!)"
+            : " (git sync OFF — notes stay on server only)")
       );
+
       const dedupe = await brain.dedupeVault().catch((err: unknown) => {
         console.warn("[obsidian] Startup dedupe skipped:", err instanceof Error ? err.message : err);
         return null;
@@ -88,27 +104,46 @@ export async function createNotePreview(
   return brain.createNotePreview(rawText, routingContext ?? {});
 }
 
-export async function createNoteCommit(previewId: string) {
+export type NoteCommitResult = Awaited<
+  ReturnType<Awaited<ReturnType<typeof getBrain>>["createNoteCommit"]>
+> & {
+  gitSynced: boolean;
+  gitError?: string;
+};
+
+export async function createNoteCommit(previewId: string): Promise<NoteCommitResult> {
   const brain = await getBrain();
   const result = await brain.createNoteCommit(previewId);
-  try {
-    await syncVaultToGit("create note");
-  } catch (err) {
-    console.error(
-      "[obsidian] Git push failed — notes saved on server only until VAULT_GIT_SYNC is fixed:",
-      err instanceof Error ? err.message : err
-    );
+  const sync = await syncVaultToGit("create note");
+  return {
+    ...result,
+    gitSynced: sync.ok,
+    gitError: sync.ok ? undefined : sync.error ?? sync.reason,
+  };
+}
+
+export function formatGitSyncFooter(gitSynced: boolean, gitError?: string): string {
+  if (gitSynced) {
+    return "\n\n☁️ Synced to GitHub — will appear in Obsidian on your Mac within ~3 min.";
   }
-  return result;
+  if (!config.vault.gitSyncEnabled) {
+    return "\n\n⚠️ Saved on server only. Set VAULT_GIT_SYNC=true in Railway to sync to Obsidian.";
+  }
+  return (
+    "\n\n⚠️ Saved on server but NOT synced to GitHub/Obsidian." +
+    (gitError ? `\nFix: ${gitError.slice(0, 200)}` : "\nFix VAULT_GIT_REMOTE in Railway Variables.")
+  );
 }
 
 export async function dedupeObsidianVault(): Promise<string> {
   const brain = await getBrain();
   const result = await brain.dedupeVault();
-  await syncVaultToGit("dedupe vault").catch((err) => {
-    console.warn("[obsidian] Git sync after dedupe failed:", err);
-  });
-  return result.message;
+  const sync = await syncVaultToGit("dedupe vault");
+  const base = result.message;
+  if (!sync.ok && !sync.skipped) {
+    return `${base}\n\n${formatGitSyncFooter(false, sync.error)}`;
+  }
+  return base;
 }
 
 export async function reindexVault() {
@@ -116,63 +151,16 @@ export async function reindexVault() {
   return brain.reindexVault();
 }
 
-export async function syncVaultToGit(reason: string): Promise<void> {
-  if (!config.vault.gitSyncEnabled || !config.vault.gitRemote) {
-    console.warn("[obsidian] Git sync skipped — set VAULT_GIT_SYNC=true and VAULT_GIT_REMOTE");
-    return;
-  }
-
-  const vaultPath = config.vault.path;
-  const branches = ["main", "master"];
-
-  try {
-    for (const branch of branches) {
-      try {
-        await execFileAsync("git", ["-C", vaultPath, "pull", "--rebase", "origin", branch], {
-          timeout: 60_000,
-        });
-        break;
-      } catch {
-        // try next branch name
-      }
-    }
-
-    await execFileAsync("git", ["-C", vaultPath, "add", "-A"], { timeout: 30_000 });
-    const status = await execFileAsync("git", ["-C", vaultPath, "status", "--porcelain"], {
-      timeout: 10_000,
-    });
-    if (!status.stdout.trim()) return;
-
-    const msg = `brain: ${reason} @ ${new Date().toISOString()}`;
-    await execFileAsync("git", ["-C", vaultPath, "commit", "-m", msg], { timeout: 30_000 });
-
-    let pushed = false;
-    for (const branch of branches) {
-      try {
-        await execFileAsync("git", ["-C", vaultPath, "push", "origin", `HEAD:${branch}`], {
-          timeout: 90_000,
-        });
-        pushed = true;
-        break;
-      } catch {
-        // try next branch
-      }
-    }
-    if (!pushed) {
-      await execFileAsync("git", ["-C", vaultPath, "push", "origin", "HEAD"], { timeout: 90_000 });
-    }
-    console.log(`[obsidian] Git sync: pushed vault (${reason})`);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[obsidian] Git sync FAILED (${reason}): ${msg}`);
-    throw err instanceof Error ? err : new Error(msg);
-  }
-}
-
 export async function bootstrapVaultIfEmpty(): Promise<void> {
   const fs = await import("node:fs/promises");
   const path = await import("node:path");
   const vaultPath = config.vault.path;
+  try {
+    await fs.access(path.join(vaultPath, "BRAIN.md"));
+    return;
+  } catch {
+    // empty — git clone may have run; bootstrap only if still no BRAIN.md
+  }
   try {
     await fs.access(vaultPath);
   } catch {

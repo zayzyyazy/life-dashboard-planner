@@ -2,6 +2,7 @@ import { getSetting, setSetting } from "../db/index.js";
 import {
   createNoteCommit,
   createNotePreview,
+  formatGitSyncFooter,
 } from "./obsidian-brain.js";
 import { buildSaveSourceText, saveOfferLine, formatAutoSaveMessage } from "./save-context.js";
 import type { ConversationTurn } from "./memory.js";
@@ -62,9 +63,10 @@ export async function tryHandleObsidianPending(message: string): Promise<string 
       const result = await createNoteCommit(pending.previewId);
       clearPendingObsidianSave();
       const paths = "paths" in result && Array.isArray(result.paths) ? result.paths : [result.path];
+      const gitFooter = formatGitSyncFooter(result.gitSynced, result.gitError);
       return paths.length > 1
-        ? `Saved to Obsidian:\n${paths.map((p) => `- ${p}`).join("\n")}`
-        : `Saved to Obsidian: ${result.path}`;
+        ? `Saved to Obsidian:\n${paths.map((p) => `- ${p}`).join("\n")}${gitFooter}`
+        : `Saved to Obsidian: ${result.path}${gitFooter}`;
     } catch (err) {
       clearPendingObsidianSave();
       return `Couldn't save to Obsidian: ${err instanceof Error ? err.message : "unknown error"}`;
@@ -165,17 +167,19 @@ export async function autoSaveToObsidian(
 
     const result = await createNoteCommit(preview.id);
     const paths = "paths" in result && Array.isArray(result.paths) ? result.paths : [result.path];
+    const gitFooter = formatGitSyncFooter(result.gitSynced, result.gitError);
     return {
       paths,
-      message: formatAutoSaveMessage({
-        paths,
-        action: "action" in result ? (result.action as "merged" | "created") : "created",
-        message: result.message,
-        deletedDuplicates:
-          "deletedDuplicates" in result && Array.isArray(result.deletedDuplicates)
-            ? result.deletedDuplicates
-            : [],
-      }),
+      message:
+        formatAutoSaveMessage({
+          paths,
+          action: "action" in result ? (result.action as "merged" | "created") : "created",
+          message: result.message,
+          deletedDuplicates:
+            "deletedDuplicates" in result && Array.isArray(result.deletedDuplicates)
+              ? result.deletedDuplicates
+              : [],
+        }) + gitFooter,
     };
   } catch (err) {
     console.error("[obsidian] auto save failed:", err);

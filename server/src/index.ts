@@ -18,6 +18,7 @@ import { runBootTasks } from "./setup.js";
 import { startTelegramBot } from "./telegram/bot.js";
 import {
   bootstrapVaultIfEmpty,
+  getVaultGitStatus,
   initObsidianBrain,
   reindexVault,
 } from "./services/obsidian-brain.js";
@@ -73,6 +74,7 @@ app.get("/health", (_req, res) => {
     open_tasks: openTasks.c,
     pending_reminders: pendingReminders.c,
     timezone: config.brief.timezone,
+    vault_git: getVaultGitStatus(),
     env: getEnvStatus(),
   });
 });

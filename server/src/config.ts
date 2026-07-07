@@ -38,6 +38,12 @@ if (envFilePath) {
   dotenv.config();
 }
 
+function envFlag(value: string | undefined): boolean {
+  if (!value?.trim()) return false;
+  const v = value.trim().toLowerCase();
+  return v === "true" || v === "1" || v === "yes" || v === "on";
+}
+
 function cleanEnv(value: string | undefined): string {
   if (!value) return "";
   return value.trim().replace(/^["']|["']$/g, "");
@@ -151,7 +157,7 @@ export const config = {
     brainDataDir:
       process.env.BRAIN_DATA_DIR ??
       path.join(process.env.DATA_DIR ?? path.join(projectRoot, "data"), "brain"),
-    gitSyncEnabled: process.env.VAULT_GIT_SYNC === "true",
+    gitSyncEnabled: envFlag(process.env.VAULT_GIT_SYNC),
     gitRemote: cleanEnv(process.env.VAULT_GIT_REMOTE),
   },
 };
@@ -163,6 +169,9 @@ export function getEnvStatus() {
     openai_api_key_configured: Boolean(config.openai.apiKey),
     telegram_bot_token_configured: Boolean(config.telegram.botToken),
     telegram_allowed_users_configured: config.telegram.allowedUserIds.length > 0,
+    vault_path: config.vault.path,
+    vault_git_sync_enabled: config.vault.gitSyncEnabled,
+    vault_git_remote_configured: Boolean(config.vault.gitRemote),
     cwd: process.cwd(),
     project_root: projectRoot,
   };
