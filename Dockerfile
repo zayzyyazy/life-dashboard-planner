@@ -10,7 +10,10 @@ COPY package.json package-lock.json ./
 COPY server/package.json server/package-lock.json ./server/
 COPY packages/obisidan-plug/package.json packages/obisidan-plug/package-lock.json ./packages/obisidan-plug/
 
-RUN npm run install:all
+# install:all runs scripts/check-node.mjs, which isn't copied yet — install directly
+RUN npm install --ignore-scripts && \
+    npm install --prefix packages/obisidan-plug && \
+    npm install --prefix server
 
 COPY packages/obisidan-plug ./packages/obisidan-plug
 RUN cd packages/obisidan-plug && npm run build
