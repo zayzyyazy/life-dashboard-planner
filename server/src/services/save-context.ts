@@ -1,4 +1,5 @@
 import type { ConversationTurn } from "./memory.js";
+import { isGenericProjectName } from "../lib/project-slugs.js";
 
 /** Rich text for structureCapture — substance from the thread, not meta summaries. */
 export function buildSaveSourceText(params: {
@@ -32,7 +33,7 @@ ${params.actionContext ? `EXTRACTED CONTEXT:\n${params.actionContext}\n` : ""}`;
 }
 
 const SAVE_SIGNAL =
-  /\b(project|build(?:ing)?|cli|tool|app|ship|mcp|marie|leaping|exam|learn|idea|health|detective|machealth|macbook|automation|startup|feature|implement|design|algorithm|uni|course|work(?:ing)? on|i'?m building|i want to build|personal project|side project|name it|call it|naming)\b/i;
+  /\b(project|build(?:ing)?|cli|tool|app|ship|mcp|marie|leaping|exam|learn|idea|health|detective|machealth|macbook|automation|startup|feature|implement|design|algorithm|course|work(?:ing)? on|i'?m building|i want to build|personal project|side project|name it|call it|naming)\b/i;
 
 const SKIP_SAVE_CLASSIFICATIONS = new Set([
   "greeting",
@@ -117,10 +118,14 @@ export function shouldProactivelyOfferSave(
 export function normalizeProjectName(name: string | null | undefined): string | null {
   if (!name?.trim()) return null;
   const cleaned = name.trim();
+  if (isGenericProjectName(cleaned)) return null;
   const known =
     cleaned.match(/\b(MacHealth(?:\s+Detective)?(?:\s+CLI)?)\b/i)?.[1] ??
     cleaned.match(/\b([A-Z][A-Za-z0-9]+(?:\s+[A-Z][A-Za-z0-9]+){0,3}(?:\s+CLI|\s+App|\s+Tool)?)\b/)?.[1];
-  if (known) return known.replace(/\s+/g, " ").trim();
+  if (known) {
+    const n = known.replace(/\s+/g, " ").trim();
+    return isGenericProjectName(n) ? null : n;
+  }
   if (cleaned.length > 48) return cleaned.split(/\s+/).slice(0, 5).join(" ");
   return cleaned;
 }
@@ -148,16 +153,16 @@ export function shouldAutoSaveToObsidian(
 
   if (actions.includes("saved_project_update")) return true;
 
-  // Wait for at least 2 user turns before auto-saving a new project thread
+  // Only auto-save named building/code projects — not casual uni/life chat
   if (actions.includes("evolving_project")) {
-    return userTurnCount >= 2 && shouldOfferObsidianSave(classification, message, history, actions);
+    const project = extractProjectNameFromThread(message, history);
+    if (isGenericProjectName(project)) return false;
+    return userTurnCount >= 3 && isBuildingThread(message, history);
   }
 
-  const hasProjectThread =
-    isBuildingThread(message, history) || classification === "project_update";
-
-  if (hasProjectThread && shouldOfferObsidianSave(classification, message, history, actions)) {
-    return userTurnCount >= 2;
+  if (classification === "project_update" && isBuildingThread(message, history)) {
+    const project = extractProjectNameFromThread(message, history);
+    if (!isGenericProjectName(project) && userTurnCount >= 2) return true;
   }
 
   return false;

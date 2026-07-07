@@ -44,6 +44,8 @@ Do NOT use the same section headings every time.
 
 ## FORBIDDEN
 - NEVER write notes about "intention to save", "project tracking", or "follow-up questions"
+- NEVER write meta descriptions like "A note summarizing..." or "captures the key points" — write THE ACTUAL CONTENT from the conversation
+- NEVER use "university" or "uni" as a project slug — uni content goes to 02-Areas/Uni/ only
 - NEVER use folder names: unspecified-project, unknown, current-project
 - NEVER use generic titles — name the actual topic (e.g. "MacHealth Detective CLI")
 

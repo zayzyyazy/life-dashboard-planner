@@ -91,9 +91,14 @@ export async function createNotePreview(
 export async function createNoteCommit(previewId: string) {
   const brain = await getBrain();
   const result = await brain.createNoteCommit(previewId);
-  await syncVaultToGit("create note").catch((err) => {
-    console.warn("[obsidian] Git sync after commit failed:", err);
-  });
+  try {
+    await syncVaultToGit("create note");
+  } catch (err) {
+    console.error(
+      "[obsidian] Git push failed — notes saved on server only until VAULT_GIT_SYNC is fixed:",
+      err instanceof Error ? err.message : err
+    );
+  }
   return result;
 }
 
@@ -112,10 +117,26 @@ export async function reindexVault() {
 }
 
 export async function syncVaultToGit(reason: string): Promise<void> {
-  if (!config.vault.gitSyncEnabled || !config.vault.gitRemote) return;
+  if (!config.vault.gitSyncEnabled || !config.vault.gitRemote) {
+    console.warn("[obsidian] Git sync skipped — set VAULT_GIT_SYNC=true and VAULT_GIT_REMOTE");
+    return;
+  }
 
   const vaultPath = config.vault.path;
+  const branches = ["main", "master"];
+
   try {
+    for (const branch of branches) {
+      try {
+        await execFileAsync("git", ["-C", vaultPath, "pull", "--rebase", "origin", branch], {
+          timeout: 60_000,
+        });
+        break;
+      } catch {
+        // try next branch name
+      }
+    }
+
     await execFileAsync("git", ["-C", vaultPath, "add", "-A"], { timeout: 30_000 });
     const status = await execFileAsync("git", ["-C", vaultPath, "status", "--porcelain"], {
       timeout: 10_000,
@@ -124,12 +145,27 @@ export async function syncVaultToGit(reason: string): Promise<void> {
 
     const msg = `brain: ${reason} @ ${new Date().toISOString()}`;
     await execFileAsync("git", ["-C", vaultPath, "commit", "-m", msg], { timeout: 30_000 });
-    await execFileAsync("git", ["-C", vaultPath, "push", "origin", "HEAD"], {
-      timeout: 60_000,
-    });
+
+    let pushed = false;
+    for (const branch of branches) {
+      try {
+        await execFileAsync("git", ["-C", vaultPath, "push", "origin", `HEAD:${branch}`], {
+          timeout: 90_000,
+        });
+        pushed = true;
+        break;
+      } catch {
+        // try next branch
+      }
+    }
+    if (!pushed) {
+      await execFileAsync("git", ["-C", vaultPath, "push", "origin", "HEAD"], { timeout: 90_000 });
+    }
     console.log(`[obsidian] Git sync: pushed vault (${reason})`);
   } catch (err) {
-    throw err instanceof Error ? err : new Error(String(err));
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[obsidian] Git sync FAILED (${reason}): ${msg}`);
+    throw err instanceof Error ? err : new Error(msg);
   }
 }
 

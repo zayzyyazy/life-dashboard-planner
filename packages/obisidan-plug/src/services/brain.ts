@@ -15,10 +15,13 @@ import {
 import {
   structureCapture,
   structuredToNoteInput,
+  isBoilerplateStructuredNote,
+  fallbackBodyFromRaw,
 } from "../ai/structure.js";
 import {
   extractVaultFolders,
   inferExtraWrites,
+  isGenericProjectSlug,
   listVaultFolderTree,
   projectSlugFromName,
   type StructureContext,
@@ -120,23 +123,43 @@ export async function createNotePreview(
     routingContext,
     vaultFolders
   );
+
+  if (isBoilerplateStructuredNote(structured)) {
+    structured.body = fallbackBodyFromRaw(rawText);
+    structured.shortSummary =
+      structured.shortSummary && structured.shortSummary.length > 20
+        ? structured.shortSummary
+        : structured.body.replace(/^## Summary\n+/i, "").slice(0, 220);
+  }
+
   const noteInput = structuredToNoteInput(structured);
   const date = new Date().toISOString().slice(0, 10);
 
   // Named project from conversation → primary folder is 03-Projects/{slug}
-  // Reuse an existing project folder if this is a variant of one (no new folders).
   if (routingContext.activeProject?.trim()) {
     const rawSlug = projectSlugFromName(routingContext.activeProject);
-    const slug = resolveCanonicalFolderSlug(rawSlug, notes);
-    noteInput.folder = `03-Projects/${slug}`;
-    noteInput.status = "filed";
+    if (!isGenericProjectSlug(rawSlug)) {
+      const slug = resolveCanonicalFolderSlug(rawSlug, notes);
+      noteInput.folder = `03-Projects/${slug}`;
+      noteInput.status = "filed";
+    }
   } else if (noteInput.folder?.startsWith("03-Projects/") || noteInput.folder?.startsWith("02-Areas/Building/")) {
     const prefix = noteInput.folder.startsWith("03-Projects/")
       ? "03-Projects/"
       : "02-Areas/Building/";
     const rawSlug = noteInput.folder.slice(prefix.length).split("/")[0]!;
-    const slug = resolveCanonicalFolderSlug(rawSlug, notes);
-    noteInput.folder = `${prefix}${slug}`;
+    if (isGenericProjectSlug(rawSlug)) {
+      if (structured.mainCategory === "Uni") {
+        noteInput.folder = "02-Areas/Uni";
+      } else if (structured.mainCategory === "Job") {
+        noteInput.folder = "02-Areas/Job";
+      } else {
+        noteInput.folder = `02-Areas/${structured.mainCategory}`;
+      }
+    } else {
+      const slug = resolveCanonicalFolderSlug(rawSlug, notes);
+      noteInput.folder = `${prefix}${slug}`;
+    }
   }
 
   const relPath = path
@@ -235,10 +258,14 @@ export async function createNoteCommit(previewId: string) {
   let mirrorFolder: string | null = null;
   if (primaryFolder.startsWith("03-Projects/")) {
     const slug = primaryFolder.replace("03-Projects/", "").split("/")[0];
-    mirrorFolder = `02-Areas/Building/${slug}`;
+    if (slug && !isGenericProjectSlug(slug)) {
+      mirrorFolder = `02-Areas/Building/${slug}`;
+    }
   } else if (primaryFolder.startsWith("02-Areas/Building/")) {
     const slug = primaryFolder.replace("02-Areas/Building/", "").split("/")[0];
-    mirrorFolder = `03-Projects/${slug}`;
+    if (slug && !isGenericProjectSlug(slug)) {
+      mirrorFolder = `03-Projects/${slug}`;
+    }
   }
   if (mirrorFolder) {
     const mirrorResult = await writeOrMergeNote(

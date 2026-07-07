@@ -106,6 +106,22 @@ export function projectSlugFromName(name: string): string {
     .slice(0, 40);
 }
 
+const GENERIC_SLUGS = new Set([
+  "university", "uni", "work", "personal", "job", "learning", "research",
+  "building", "project", "general", "note", "update", "progress", "reflection",
+  "lectures", "planning", "starting", "ideas", "school", "college",
+]);
+
+export function isGenericProjectSlug(slug: string): boolean {
+  const s = slug.toLowerCase().replace(/^-|-$/g, "");
+  if (!s || s.length < 2) return true;
+  return GENERIC_SLUGS.has(s) || GENERIC_SLUGS.has(s.split("-")[0]!);
+}
+
+function isAreaFolder(folder: string): boolean {
+  return /^02-Areas\/(Uni|Job|Learning|Research|Personal)(\/|$)/.test(folder);
+}
+
 export function inferExtraWrites(params: {
   folder: string;
   confidence: number;
@@ -127,7 +143,12 @@ export function inferExtraWrites(params: {
         ? projectSlugFromName(projectName)
         : null;
 
-  if (folder.startsWith("03-Projects/") && slug) {
+  // Life areas (uni, job, etc.) — one primary note only, no fake "projects"
+  if (isAreaFolder(folder)) {
+    return [];
+  }
+
+  if (folder.startsWith("03-Projects/") && slug && !isGenericProjectSlug(slug)) {
     writes.push({
       kind: "project_log",
       folder: `03-Projects/${slug}`,
@@ -140,7 +161,7 @@ export function inferExtraWrites(params: {
       section: "Log",
       content: shortSummary,
     });
-  } else if (folder.startsWith("02-Areas/Building/") && slug) {
+  } else if (folder.startsWith("02-Areas/Building/") && slug && !isGenericProjectSlug(slug)) {
     writes.push({
       kind: "project_mirror",
       folder: `03-Projects/${slug}`,
@@ -153,7 +174,7 @@ export function inferExtraWrites(params: {
       section: "Log",
       content: shortSummary,
     });
-  } else if (projectName && slug) {
+  } else if (projectName && slug && !isGenericProjectSlug(slug)) {
     writes.push({
       kind: "project_log",
       folder: `03-Projects/${slug}`,
@@ -163,9 +184,10 @@ export function inferExtraWrites(params: {
   }
 
   if (
-    folder.startsWith("02-Areas/") ||
-    folder.startsWith("03-Projects/") ||
-    folder.startsWith("04-Resources/")
+    !isAreaFolder(folder) &&
+    (folder.startsWith("02-Areas/") ||
+      folder.startsWith("03-Projects/") ||
+      folder.startsWith("04-Resources/"))
   ) {
     writes.push({
       kind: "daily_log",

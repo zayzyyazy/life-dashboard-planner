@@ -156,3 +156,34 @@ export function structuredToNoteInput(structured: StructuredNote) {
 }
 
 export { formatStructuredBody };
+
+const BOILERPLATE_RE =
+  /\b(note summariz|captures the key points|recent activities|this note captures|progress related to|document outcomes|key points and updates|summarizing recent)\b/i;
+
+export function isBoilerplateStructuredNote(structured: StructuredNote): boolean {
+  const text = `${structured.title}\n${structured.shortSummary}\n${structured.body}`;
+  if (BOILERPLATE_RE.test(text)) return true;
+  if (
+    structured.body.length < 150 &&
+    /\b(summariz|capture|document|track(?:ing)?)\b/i.test(structured.title)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function fallbackBodyFromRaw(raw: string): string {
+  const conv = raw.match(/CONVERSATION:\n([\s\S]*?)(?:\n\nLATEST USER|\n\nEXTRACTED|$)/)?.[1];
+  const latest = raw.match(/LATEST USER MESSAGE:\n([\s\S]*?)(?:\n\nEXTRACTED|$)/)?.[1];
+  const parts: string[] = [];
+  if (conv?.trim()) {
+    parts.push("## Conversation", "", conv.trim().slice(0, 2500));
+  }
+  if (latest?.trim()) {
+    parts.push("## Latest", "", latest.trim().slice(0, 800));
+  }
+  if (parts.length === 0) {
+    parts.push("## Summary", "", raw.trim().slice(0, 2500));
+  }
+  return parts.join("\n");
+}
