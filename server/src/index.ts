@@ -148,6 +148,7 @@ app.listen(config.port, host, () => {
   void bootstrapVaultIfEmpty()
     .then(() => initObsidianBrain())
     .then(() => reindexVault())
+    .then(() => import("./services/profile-obsidian.js").then((m) => m.syncProfileToObsidian()))
     .catch((err) => console.error("[obsidian] Startup:", err));
   startTelegramBot().catch((err) => console.error("[telegram] Failed to start:", err));
   startScheduler();

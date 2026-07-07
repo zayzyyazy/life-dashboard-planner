@@ -178,12 +178,15 @@ export function tryFastClassify(
 
   if (
     /\b(remember|save)\s+(this|that|about me)\b/i.test(trimmed) ||
-    /^for\s+(university|uni|work|personal)\s*:/i.test(trimmed)
+    /^for\s+(university|uni|work|personal)\s*:/i.test(trimmed) ||
+    /\b(i\s+(like|love|prefer|enjoy|hate|dislike|don'?t\s+like))\b/i.test(trimmed) ||
+    /\b(know that i|about me:|remember:)\b/i.test(trimmed)
   ) {
     const isProfile =
       /\babout\s+me\b/i.test(trimmed) ||
-      /\b(i\s+(study|work|am|live))\b/i.test(trimmed) ||
-      /^for\s+(university|uni|work|personal)\s*:/i.test(trimmed);
+      /\b(i\s+(study|work|am|live|like|love|prefer|enjoy|hate|dislike|don'?t\s+like))\b/i.test(trimmed) ||
+      /^for\s+(university|uni|work|personal)\s*:/i.test(trimmed) ||
+      /\b(know that i|remember:)\b/i.test(trimmed);
     return {
       classification: isProfile ? "profile_memory" : "general_memory",
       project_name: null,

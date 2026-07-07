@@ -2,6 +2,10 @@ import { getDb } from "../db/index.js";
 import { domainLabel, isLifeDomain, type LifeDomain } from "../types/domains.js";
 import { USER_PROFILE_SEED, USER_KNOWLEDGE_SEED } from "../data/user-profile-seed.js";
 
+function queueProfileVaultSync(): void {
+  void import("./profile-obsidian.js").then((m) => m.scheduleProfileObsidianSync());
+}
+
 export { domainLabel };
 
 export interface UserProfile {
@@ -62,6 +66,7 @@ export function updateProfile(
       `UPDATE user_profile SET ${fields.join(", ")}, updated_at = datetime('now') WHERE id = 1`
     )
     .run(...values);
+  queueProfileVaultSync();
   return getProfile();
 }
 
@@ -83,6 +88,8 @@ export function addKnowledge(input: {
       input.content,
       input.source ?? "chat"
     ) as KnowledgeEntry;
+
+  queueProfileVaultSync();
   return result;
 }
 

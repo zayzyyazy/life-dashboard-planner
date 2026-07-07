@@ -3,7 +3,9 @@ import type { ClassificationResult } from "../agent/classifier.js";
 import {
   addKnowledge,
   domainLabel,
+  getProfile,
   inferDomainFromText,
+  updateProfile,
 } from "./profile.js";
 import { isLifeDomain, type LifeDomain } from "../types/domains.js";
 import { buildRichContext } from "./context-builder.js";
@@ -577,9 +579,42 @@ export async function handleClassification(
       };
     }
 
-    case "profile_memory":
+    case "profile_memory": {
+      if (looksLikeNewBuildingProject(message, recentTurns)) {
+        const name =
+          extractProjectNameFromThread(message, recentTurns) ??
+          extracted.title ??
+          "Personal build";
+        actions.push("evolving_project");
+        return {
+          reply: "",
+          actions,
+          actionContext: `Building project "${name}": ${(extracted.content ?? message).slice(0, 600)}`,
+        };
+      }
+      const domain = resolveLifeDomain(result, message);
+      const title = extracted.title ?? inferProfileTitle(message);
+      const content = extracted.content ?? message;
+      addKnowledge({ domain, title, content, source: updateSource });
+      actions.push("saved_profile_memory");
+
+      if (/\b(i\s+(like|love|prefer|enjoy|hate|dislike|don'?t\s+like))\b/i.test(message)) {
+        const profile = getProfile();
+        const line = `- ${content.trim()}`;
+        const prefs = profile.preferences?.trim()
+          ? `${profile.preferences.trim()}\n${line}`
+          : line;
+        updateProfile({ preferences: prefs.slice(0, 4000) });
+      }
+
+      return {
+        reply: "",
+        actions,
+        actionContext: `Profile fact (${domainLabel(domain)} — ${title}): ${content.slice(0, 500)}`,
+      };
+    }
+
     case "general_memory": {
-      // Building a new tool/app is a project thread, not a profile fact
       if (looksLikeNewBuildingProject(message, recentTurns)) {
         const name =
           extractProjectNameFromThread(message, recentTurns) ??
@@ -595,12 +630,7 @@ export async function handleClassification(
       const domain = resolveLifeDomain(result, message);
       const title = extracted.title ?? "Note";
       const content = extracted.content ?? message;
-      addKnowledge({
-        domain,
-        title,
-        content,
-        source: updateSource,
-      });
+      addKnowledge({ domain, title, content, source: updateSource });
       actions.push("saved_knowledge");
       return {
         reply: "",
@@ -637,6 +667,16 @@ export async function buildContext(
   } = {}
 ): Promise<string> {
   return buildRichContext(options);
+}
+
+function inferProfileTitle(message: string): string {
+  const trimmed = message.trim();
+  const like = trimmed.match(/\bi\s+(like|love|prefer|enjoy)\s+(.+)/i);
+  if (like) return `Likes: ${like[2]!.slice(0, 48).trim()}`;
+  const dislike = trimmed.match(/\bi\s+(hate|dislike|don'?t\s+like)\s+(.+)/i);
+  if (dislike) return `Dislikes: ${dislike[2]!.slice(0, 48).trim()}`;
+  if (/remember:/i.test(trimmed)) return "Remembered fact";
+  return trimmed.slice(0, 48) || "About me";
 }
 
 function resolveLifeDomain(result: ClassificationResult, message: string): LifeDomain {

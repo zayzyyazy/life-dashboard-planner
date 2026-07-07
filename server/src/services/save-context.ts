@@ -163,8 +163,9 @@ export function shouldAutoSaveToObsidian(
   return false;
 }
 
-/** Only explicit save: commands need confirmation. */
+/** Only explicit save: commands need confirmation. Profile facts sync to Personal/ directly. */
 export function shouldConfirmObsidianSave(actions: string[] = []): boolean {
+  if (actions.some((a) => a === "saved_profile_memory")) return false;
   return actions.some((a) => a === "saved_knowledge" || a === "saved_decision");
 }
 

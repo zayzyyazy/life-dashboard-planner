@@ -20,6 +20,7 @@ import {
   autoSaveToObsidian,
   tryHandleObsidianPending,
 } from "./obsidian-save.js";
+import { syncProfileToObsidian } from "./profile-obsidian.js";
 import { tryVaultFastPath } from "./vault-fast-path.js";
 import { autoRecallContext, recallAddon } from "./recall-context.js";
 import { inferActiveProjectFromMessage } from "./project-resolve.js";
@@ -325,6 +326,20 @@ export async function processChat(
     const offer = await offerObsidianSave(saveParams);
     if (offer) {
       reply = reply ? `${reply}\n\n${offer.offerLine}` : offer.offerLine;
+    }
+  }
+
+  if (handled.actions.includes("saved_profile_memory")) {
+    try {
+      const paths = await syncProfileToObsidian();
+      const personalPaths = paths.filter((p) => p.includes("02-Areas/Personal"));
+      const note =
+        personalPaths.length > 0
+          ? `📝 Saved to your profile in Obsidian:\n${personalPaths.map((p) => `- ${p}`).join("\n")}`
+          : "📝 Saved to your agent profile (Obsidian Personal folder).";
+      reply = reply ? `${reply}\n\n${note}` : note;
+    } catch (err) {
+      console.warn("[profile-obsidian] chat sync failed:", err);
     }
   }
 

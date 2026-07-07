@@ -7,6 +7,8 @@ This vault is the long-term memory for your AI second brain.
 - `00-Inbox/` — new captures and AI drafts (review and file regularly)
 - `01-Daily/` — daily notes (`YYYY-MM-DD.md`)
 - `02-Areas/` — ongoing life areas (Uni, Job, Personal, Research, Building, Learning)
+  - `Personal/About-Me.md` — agent's long-term memory about you (auto-synced from chat)
+  - `Personal/Knowledge/` — individual facts (likes, dislikes, preferences)
 - `03-Projects/` — time-bound projects
 - `04-Resources/` — reference material
 - `05-Archive/` — inactive notes
