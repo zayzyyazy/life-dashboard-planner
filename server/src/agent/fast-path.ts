@@ -237,7 +237,7 @@ function isWorkThreadContinuation(
 
   const lower = message.toLowerCase();
   const continuationCue =
-    /\b(idk|just|need to|trying to|working on|get .+ running|deploy|ship|fix|debug)\b/i.test(
+    /\b(idk|just|need to|trying to|working on|get .+ running|deploy|ship|fix|debug|call it|name it|naming|yeah|sounds good|got it)\b/i.test(
       lower
     );
   if (!continuationCue) return false;
@@ -248,7 +248,7 @@ function isWorkThreadContinuation(
     .join(" ")
     .toLowerCase();
   const workTopic =
-    /\b(mcp|marie|leaping|debug|deploy|server|bot|verification|api|backend)\b/i.test(
+    /\b(mcp|marie|leaping|debug|deploy|server|bot|verification|api|backend|cli|detective|health|machealth|macbook|tool|build(?:ing)?)\b/i.test(
       recentText
     );
   return workTopic;
@@ -303,6 +303,8 @@ function isAwaitingReminderTime(turns: ConversationTurn[]): boolean {
   return (
     c.includes("when?") ||
     c.includes("when should i remind") ||
+    c.includes("when should i ping") ||
+    c.includes("still need a time") ||
     c.includes("reply with a time") ||
     c.includes("more context")
   );

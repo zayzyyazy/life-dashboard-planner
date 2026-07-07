@@ -12,6 +12,7 @@ import {
   formatSearchResults,
   getVaultStatus,
   searchVault,
+  dedupeObsidianVault,
 } from "../services/obsidian-brain.js";
 import { getProfile, listKnowledge, domainLabel } from "../services/profile.js";
 
@@ -48,6 +49,7 @@ export const HELP_MESSAGE = `Examples:
 
 Commands:
 /vault — Obsidian vault stats
+/dedupe — merge duplicate + delete empty notes
 /search <query> — search your notes
 /ask <question> — ask over your notes
 /brief — today's brief
@@ -205,6 +207,14 @@ export async function handleGitHubCommand(): Promise<string> {
   return answerGitHubQuestion("What's happening across my GitHub repos right now?", {
     short: true,
   });
+}
+
+export async function handleDedupeCommand(): Promise<string> {
+  try {
+    return await dedupeObsidianVault();
+  } catch (err) {
+    return `Dedupe failed: ${err instanceof Error ? err.message : "unknown"}`;
+  }
 }
 
 export async function handleVaultCommand(): Promise<string> {

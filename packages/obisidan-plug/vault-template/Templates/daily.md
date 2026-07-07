@@ -4,9 +4,10 @@ tags: [daily]
 ---
 
 ## Capture
-<!-- raw brain dump lands here -->
+<!-- morning plan / brain dump -->
 
 ## Tasks
-- [ ]
+<!-- open items with dates — agent appends here -->
 
 ## Log
+<!-- evening review — what you did today -->

@@ -35,6 +35,38 @@ export function parseDueDate(message: string, now = new Date()): string | null {
     return d.toISOString();
   }
 
+  if (/\bin\s+half\s+an?\s+hour\b/.test(text) || /\bin\s+a\s+half\s+hour\b/.test(text)) {
+    const d = new Date(now);
+    d.setMinutes(d.getMinutes() + 30);
+    return d.toISOString();
+  }
+
+  if (/\btomorrow\s+morning\b/.test(text)) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + 1);
+    d.setHours(9, 0, 0, 0);
+    return d.toISOString();
+  }
+
+  if (/\btomorrow\s+evening\b/.test(text) || /\btomorrow\s+night\b/.test(text)) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + 1);
+    d.setHours(20, 0, 0, 0);
+    return d.toISOString();
+  }
+
+  if (/\bnext\s+week\b/.test(text)) {
+    const weekday = text.match(
+      /\bnext\s+week\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/
+    );
+    if (weekday) {
+      const d = resolveWeekday(weekday[1], true, now);
+      d.setDate(d.getDate() + 7);
+      const at = parseAtTime(message, d);
+      return at.toISOString();
+    }
+  }
+
   const inHours = text.match(/\bin\s+(\d+)\s*(hour|hours|hr|hrs)\b/);
   if (inHours) {
     const d = new Date(now);
@@ -64,6 +96,30 @@ export function parseDueDate(message: string, now = new Date()): string | null {
     return at.toISOString();
   }
 
+  // "remind me 12pm" / "remind me at noon"
+  if (/\b(remind|reminder|ping me|notify)\b/.test(text)) {
+    const remindTime =
+      text.match(/\b(?:remind\s+me\s+|at\s+)(\d{1,2})\s*(am|pm)\b/i) ??
+      text.match(/\b(?:remind\s+me\s+|at\s+)(noon|midnight)\b/i);
+    if (remindTime) {
+      const d = new Date(now);
+      if (remindTime[1]?.toLowerCase() === "noon") {
+        d.setHours(12, 0, 0, 0);
+      } else if (remindTime[1]?.toLowerCase() === "midnight") {
+        d.setHours(0, 0, 0, 0);
+        d.setDate(d.getDate() + 1);
+      } else {
+        let hours = parseInt(remindTime[1], 10);
+        const ampm = remindTime[2]?.toLowerCase();
+        if (ampm === "pm" && hours < 12) hours += 12;
+        if (ampm === "am" && hours === 12) hours = 0;
+        d.setHours(hours, 0, 0, 0);
+      }
+      if (d.getTime() <= now.getTime()) d.setDate(d.getDate() + 1);
+      return d.toISOString();
+    }
+  }
+
   // "at 23:30" without today/tomorrow — only when clearly scheduling
   if (/\b(remind|reminder|ping me|notify)\b/.test(text) && /\bat\s+\d{1,2}/i.test(message)) {
     const d = new Date(now);
@@ -89,6 +145,24 @@ export function parseBareDateTime(text: string, now = new Date()): string | null
   if (hm) {
     const d = new Date(now);
     d.setHours(parseInt(hm[1], 10), parseInt(hm[2], 10), 0, 0);
+    if (d.getTime() <= now.getTime()) d.setDate(d.getDate() + 1);
+    return d.toISOString();
+  }
+
+  const ampm = t.match(/^(\d{1,2})\s*(am|pm)$/i);
+  if (ampm) {
+    const d = new Date(now);
+    let hours = parseInt(ampm[1], 10);
+    if (ampm[2].toLowerCase() === "pm" && hours < 12) hours += 12;
+    if (ampm[2].toLowerCase() === "am" && hours === 12) hours = 0;
+    d.setHours(hours, 0, 0, 0);
+    if (d.getTime() <= now.getTime()) d.setDate(d.getDate() + 1);
+    return d.toISOString();
+  }
+
+  if (/^noon$/i.test(t)) {
+    const d = new Date(now);
+    d.setHours(12, 0, 0, 0);
     if (d.getTime() <= now.getTime()) d.setDate(d.getDate() + 1);
     return d.toISOString();
   }
@@ -256,9 +330,12 @@ export function looksLikeReminder(message: string): boolean {
 
 export function looksLikeTimeFollowUp(message: string): boolean {
   const t = message.trim();
-  if (t.length > 40) return false;
+  if (t.length > 60) return false;
   return (
     /^\d{1,2}:\d{2}$/.test(t) ||
+    /^\d{1,2}\s*(am|pm)$/i.test(t) ||
+    /^(noon|midnight)$/i.test(t) ||
+    /^in\s+\d+\s*(min|mins?|minutes?|hours?|hrs?)\b/i.test(t) ||
     /^(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i.test(t) ||
     /^(\w+\s+\d{1,2}(?:st|nd|rd|th)?\s+\d{1,2}:\d{2})$/i.test(t) ||
     /^(\d{1,2}\s+\w+\s+\d{1,2}:\d{2})$/i.test(t)

@@ -41,6 +41,15 @@ export async function initObsidianBrain(): Promise<void> {
       console.log(
         `[obsidian] Vault ready: ${status.noteCount} notes at ${status.vaultPath}`
       );
+      const dedupe = await brain.dedupeVault().catch((err: unknown) => {
+        console.warn("[obsidian] Startup dedupe skipped:", err instanceof Error ? err.message : err);
+        return null;
+      });
+      if (dedupe && dedupe.deleted.length > 0) {
+        console.log(
+          `[obsidian] Cleaned ${dedupe.deleted.length} duplicate note(s) on startup`
+        );
+      }
     } catch (err) {
       console.error(
         "[obsidian] Brain init failed:",
@@ -67,9 +76,16 @@ export async function searchVault(query: string, limit?: number) {
   return brain.searchVault(query, limit);
 }
 
-export async function createNotePreview(rawText: string) {
+export async function createNotePreview(
+  rawText: string,
+  routingContext?: {
+    activeProject?: string | null;
+    projectNames?: string[];
+    saveIntent?: "capture" | "task" | "project_log" | "resource" | "daily_review";
+  }
+) {
   const brain = await getBrain();
-  return brain.createNotePreview(rawText);
+  return brain.createNotePreview(rawText, routingContext ?? {});
 }
 
 export async function createNoteCommit(previewId: string) {
@@ -79,6 +95,15 @@ export async function createNoteCommit(previewId: string) {
     console.warn("[obsidian] Git sync after commit failed:", err);
   });
   return result;
+}
+
+export async function dedupeObsidianVault(): Promise<string> {
+  const brain = await getBrain();
+  const result = await brain.dedupeVault();
+  await syncVaultToGit("dedupe vault").catch((err) => {
+    console.warn("[obsidian] Git sync after dedupe failed:", err);
+  });
+  return result.message;
 }
 
 export async function reindexVault() {
@@ -140,4 +165,22 @@ export function formatSearchResults(
     .slice(0, limit)
     .map((h) => `• ${h.title}\n  ${h.path}\n  ${h.snippet.slice(0, 120)}…`)
     .join("\n\n");
+}
+
+export async function appendVaultDailyTask(params: {
+  title: string;
+  dueDate?: string | null;
+  projectTag?: string;
+}): Promise<void> {
+  const brain = await getBrain();
+  await brain.appendDailyNote("Tasks", params.title, {
+    asTask: true,
+    dueDate: params.dueDate ?? undefined,
+    projectTag: params.projectTag,
+  });
+}
+
+export async function appendVaultDailyLog(line: string): Promise<void> {
+  const brain = await getBrain();
+  await brain.appendDailyNote("Log", line);
 }

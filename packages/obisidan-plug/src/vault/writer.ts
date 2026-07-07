@@ -117,3 +117,121 @@ export async function rewriteNoteBody(
   };
   await fs.writeFile(abs, matter.stringify(newBody, merged), "utf8");
 }
+
+const DAILY_TEMPLATE = `---
+date: {{date}}
+tags: [daily]
+---
+
+## Capture
+
+## Tasks
+
+## Log
+`;
+
+function formatTimestamp(date = new Date()): string {
+  return date.toISOString().slice(0, 16).replace("T", " ");
+}
+
+export async function ensureDailyNote(vaultRoot: string, date?: string): Promise<string> {
+  const day = date ?? new Date().toISOString().slice(0, 10);
+  const relPath = `01-Daily/${day}.md`;
+  const abs = path.join(vaultRoot, relPath);
+  try {
+    await fs.access(abs);
+    return relPath;
+  } catch {
+    const content = DAILY_TEMPLATE.replace("{{date}}", day);
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, content, "utf8");
+    return relPath;
+  }
+}
+
+function appendUnderSection(body: string, section: string, line: string): string {
+  const header = `## ${section}`;
+  const idx = body.indexOf(header);
+  if (idx === -1) {
+    return `${body.trim()}\n\n${header}\n${line}\n`;
+  }
+  const afterHeader = idx + header.length;
+  const rest = body.slice(afterHeader);
+  const nextHeader = rest.search(/\n## /);
+  const sectionBody = nextHeader === -1 ? rest : rest.slice(0, nextHeader);
+  const afterSection = nextHeader === -1 ? "" : rest.slice(nextHeader);
+  const trimmed = sectionBody.trimEnd();
+  const updated = `${trimmed}\n${line}\n`;
+  return body.slice(0, afterHeader) + updated + afterSection;
+}
+
+export async function appendToDailyNote(
+  vaultRoot: string,
+  section: "Capture" | "Tasks" | "Log",
+  content: string,
+  options: { date?: string; asTask?: boolean; dueDate?: string; projectTag?: string } = {}
+): Promise<string> {
+  const relPath = await ensureDailyNote(vaultRoot, options.date);
+  const abs = path.join(vaultRoot, relPath);
+  const raw = await fs.readFile(abs, "utf8");
+  const { data, content: body } = matter(raw);
+
+  let line = content.trim();
+  if (section === "Log") {
+    line = `- ${formatTimestamp()} — ${line}`;
+  } else if (section === "Tasks" || options.asTask) {
+    const due = options.dueDate ? ` 📅 ${options.dueDate.slice(0, 10)}` : "";
+    const tag = options.projectTag ? ` #project/${options.projectTag}` : "";
+    line = `- [ ] ${line}${due}${tag}`;
+  }
+
+  const newBody = appendUnderSection(body, section, line);
+  await fs.writeFile(abs, matter.stringify(newBody, data), "utf8");
+  return relPath;
+}
+
+export async function appendToProjectLog(
+  vaultRoot: string,
+  projectFolder: string,
+  entry: {
+    title: string;
+    summary: string;
+    done?: string[];
+    next?: string[];
+    shaky?: string[];
+  }
+): Promise<string> {
+  const folder = projectFolder.replace(/\\/g, "/").replace(/\/+$/, "");
+  const relPath = `${folder}/log.md`;
+  const abs = path.join(vaultRoot, relPath);
+  await fs.mkdir(path.dirname(abs), { recursive: true });
+
+  const ts = formatTimestamp();
+  const block = [
+    `### ${ts} — ${entry.title}`,
+    `**Summary:** ${entry.summary}`,
+    entry.done?.length ? `**Done:** ${entry.done.join("; ")}` : "",
+    entry.next?.length ? `**Next:** ${entry.next.join("; ")}` : "",
+    entry.shaky?.length ? `**Shaky:** ${entry.shaky.join("; ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  let body = "";
+  try {
+    const raw = await fs.readFile(abs, "utf8");
+    const parsed = matter(raw);
+    body = parsed.content.trim();
+  } catch {
+    body = `# ${path.basename(folder)} Log\n`;
+  }
+
+  const newBody = `${body}\n\n${block}\n`;
+  const frontmatter = {
+    title: `${path.basename(folder)} Log`,
+    tags: ["project-log"],
+    updated: new Date().toISOString(),
+  };
+  await fs.writeFile(abs, matter.stringify(newBody, frontmatter), "utf8");
+  return relPath;
+}

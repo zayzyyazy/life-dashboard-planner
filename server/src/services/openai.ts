@@ -35,6 +35,19 @@ export async function chatCompletion(
 }
 
 export async function transcribeAudio(filePath: string): Promise<string> {
+  // Prefer Groq (free whisper-large-v3-turbo) when configured
+  if (config.groq.apiKey) {
+    const groq = new OpenAI({
+      apiKey: config.groq.apiKey,
+      baseURL: "https://api.groq.com/openai/v1",
+    });
+    const response = await groq.audio.transcriptions.create({
+      file: fs.createReadStream(filePath),
+      model: config.groq.transcriptionModel,
+    });
+    return response.text.trim();
+  }
+
   const openai = getOpenAI();
   const response = await openai.audio.transcriptions.create({
     file: fs.createReadStream(filePath),

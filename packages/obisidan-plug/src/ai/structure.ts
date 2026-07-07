@@ -3,6 +3,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { MAIN_CATEGORIES, type MainCategory } from "../config.js";
+import {
+  buildRoutingPromptBlock,
+  normalizeSuggestedFolder,
+  type StructureContext,
+} from "../routing/resolveDestinations.js";
 import { chatCompletion } from "./provider.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -18,12 +23,17 @@ const StructureSchema = z.object({
     "Learning",
   ]),
   categoryPath: z.array(z.string()).min(2).max(4),
-  shortSummary: z.string().max(220),
-  body: z.string(),
-  tags: z.array(z.string()).max(8),
-  anchors: z.array(z.string()).max(12),
-  suggestedFolder: z.string(),
-  relatedTitles: z.array(z.string()).max(5),
+  shortSummary: z.string().max(220).default(""),
+  nextSteps: z.array(z.string()).max(5).default([]),
+  doneItems: z.array(z.string()).max(5).default([]),
+  shakyAreas: z.array(z.string()).max(5).default([]),
+  body: z.string().default(""),
+  tags: z.array(z.string()).max(8).default([]),
+  anchors: z.array(z.string()).max(12).default([]),
+  threadAnchorLabel: z.string().optional(),
+  suggestedFolder: z.string().default("00-Inbox"),
+  confidence: z.number().min(0).max(1).default(0.5),
+  relatedTitles: z.array(z.string()).max(5).default([]),
 });
 
 export type StructuredNote = z.infer<typeof StructureSchema>;
@@ -44,28 +54,64 @@ function normalizeMainCategory(candidate: string): MainCategory {
   return "Personal";
 }
 
+function formatStructuredBody(structured: StructuredNote): string {
+  let body = structured.body.trim();
+
+  // Body is primary — LLM improvises ## sections. Ensure Summary exists.
+  if (body.includes("##")) {
+    if (!/##\s*Summary/i.test(body) && structured.shortSummary) {
+      body = `## Summary\n${structured.shortSummary}\n\n${body}`;
+    }
+    return body;
+  }
+
+  // Fallback if LLM returned plain text without headings
+  const parts: string[] = [`## Summary\n${structured.shortSummary || body}`];
+  if (structured.doneItems.length > 0) {
+    parts.push(`## Progress\n${structured.doneItems.map((i) => `- ${i}`).join("\n")}`);
+  }
+  if (structured.nextSteps.length > 0) {
+    parts.push(`## Next steps\n${structured.nextSteps.map((i) => `- ${i}`).join("\n")}`);
+  }
+  if (structured.shakyAreas.length > 0) {
+    parts.push(`## Open questions\n${structured.shakyAreas.map((i) => `- ${i}`).join("\n")}`);
+  }
+  if (body && body !== structured.shortSummary) {
+    parts.push(body);
+  }
+  return parts.join("\n\n");
+}
+
 export async function structureCapture(
   raw: string,
-  contextSnippets: string[]
+  contextSnippets: string[],
+  routingContext: StructureContext = {},
+  vaultFolders: string[] = []
 ): Promise<StructuredNote> {
   const system = await loadSystemPrompt();
+  const routingBlock = buildRoutingPromptBlock(vaultFolders, routingContext);
+
   const raw_json = await chatCompletion(
     [
       { role: "system", content: system },
       {
         role: "user",
-        content: `INPUT:\n"""${raw.trim()}"""\n\nSIMILAR NOTES IN VAULT:\n${
+        content: `INPUT:\n"""${raw.trim()}"""\n\nROUTING CONTEXT:\n${routingBlock}\n\nSIMILAR NOTES IN VAULT:\n${
           contextSnippets.length ? contextSnippets.join("\n---\n") : "(none)"
         }\n\nReturn JSON:\n{
   "title": string,
   "mainCategory": "Uni"|"Job"|"Personal"|"Research"|"Building"|"Learning",
   "categoryPath": [string, string, string?],
-  "shortSummary": string,
-  "body": string (markdown body for the note),
+  "body": string (markdown with improvised ## sections — always include ## Summary, then headings that fit the content),
   "tags": string[],
   "anchors": string[],
-  "suggestedFolder": string (default "00-Inbox"),
-  "relatedTitles": string[]
+  "threadAnchorLabel": string,
+  "suggestedFolder": string,
+  "confidence": number (0-1),
+  "relatedTitles": string[],
+  "nextSteps": string[] (optional hints),
+  "doneItems": string[] (optional hints),
+  "shakyAreas": string[] (optional hints)
 }`,
       },
     ],
@@ -76,22 +122,37 @@ export async function structureCapture(
   return {
     ...parsed,
     mainCategory: normalizeMainCategory(parsed.mainCategory),
-    suggestedFolder: parsed.suggestedFolder?.trim() || "00-Inbox",
+    suggestedFolder: normalizeSuggestedFolder(
+      parsed.suggestedFolder?.trim() || "00-Inbox",
+      parsed.confidence ?? 0.5,
+      parsed.title,
+      parsed.mainCategory
+    ),
     anchors: parsed.anchors.map((a) => a.toLowerCase()).filter((a) => a.length >= 3),
+    nextSteps: parsed.nextSteps ?? [],
+    doneItems: parsed.doneItems ?? [],
+    shakyAreas: parsed.shakyAreas ?? [],
   };
 }
 
 export function structuredToNoteInput(structured: StructuredNote) {
-  const bodyParts = [structured.shortSummary, "", structured.body].filter(Boolean);
+  const body = formatStructuredBody(structured);
+  const tags = [
+    ...new Set([...(structured.tags ?? []), structured.threadAnchorLabel].filter(Boolean)),
+  ] as string[];
+
   return {
     title: structured.title,
-    body: bodyParts.join("\n"),
-    folder: structured.suggestedFolder.startsWith("00-Inbox")
-      ? "00-Inbox"
-      : structured.suggestedFolder,
-    tags: structured.tags,
+    body,
+    folder: structured.suggestedFolder,
+    tags,
     category: structured.mainCategory,
     anchors: structured.anchors,
     related: structured.relatedTitles,
+    confidence: structured.confidence,
+    shortSummary: structured.shortSummary,
+    status: structured.suggestedFolder.startsWith("00-Inbox") ? "inbox" : "filed",
   };
 }
+
+export { formatStructuredBody };

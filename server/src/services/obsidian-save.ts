@@ -3,6 +3,8 @@ import {
   createNoteCommit,
   createNotePreview,
 } from "./obsidian-brain.js";
+import { buildSaveSourceText, saveOfferLine, formatAutoSaveMessage } from "./save-context.js";
+import type { ConversationTurn } from "./memory.js";
 
 const PENDING_KEY = "pending_obsidian_save";
 
@@ -32,11 +34,16 @@ export function clearPendingObsidianSave(): void {
 }
 
 function looksLikeYes(message: string): boolean {
-  return /^(yes|y|yeah|yep|save|ok|okay|do it|confirm)\b/i.test(message.trim());
+  const trimmed = message.trim();
+  // Only short standalone confirmations — not "Yeah let's start with battery..."
+  if (trimmed.length > 20) return false;
+  return /^(yes|y|yeah|yep|save|ok|okay|do it|confirm)[\s!.]*$/i.test(trimmed);
 }
 
 function looksLikeNo(message: string): boolean {
-  return /^(no|n|nope|skip|cancel|don't)\b/i.test(message.trim());
+  const trimmed = message.trim();
+  if (trimmed.length > 20) return false;
+  return /^(no|n|nope|skip|cancel|don't|dont)[\s!.]*$/i.test(trimmed);
 }
 
 function looksLikeEdit(message: string): boolean {
@@ -54,7 +61,10 @@ export async function tryHandleObsidianPending(message: string): Promise<string 
     try {
       const result = await createNoteCommit(pending.previewId);
       clearPendingObsidianSave();
-      return `Saved to Obsidian: ${result.path}`;
+      const paths = "paths" in result && Array.isArray(result.paths) ? result.paths : [result.path];
+      return paths.length > 1
+        ? `Saved to Obsidian:\n${paths.map((p) => `- ${p}`).join("\n")}`
+        : `Saved to Obsidian: ${result.path}`;
     } catch (err) {
       clearPendingObsidianSave();
       return `Couldn't save to Obsidian: ${err instanceof Error ? err.message : "unknown error"}`;
@@ -87,10 +97,31 @@ export async function tryHandleObsidianPending(message: string): Promise<string 
 
 /** Create preview from content and store pending save offer. */
 export async function offerObsidianSave(
-  sourceText: string
-): Promise<{ previewId: string; offerLine: string } | null> {
+  params: {
+    userMessage: string;
+    conversationTurns: ConversationTurn[];
+    actionContext?: string;
+    activeProject?: string | null;
+    projectName?: string | null;
+    saveIntent?: "capture" | "task" | "project_log" | "resource" | "daily_review";
+  }
+): Promise<{ previewId: string; offerLine: string; folderHint?: string } | null> {
   try {
-    const preview = await createNotePreview(sourceText);
+    const sourceText = buildSaveSourceText({
+      userMessage: params.userMessage,
+      conversationTurns: params.conversationTurns,
+      actionContext: params.actionContext,
+      projectName: params.projectName ?? params.activeProject,
+    });
+
+    const preview = await createNotePreview(sourceText, {
+      activeProject: params.activeProject,
+      saveIntent: params.saveIntent ?? "capture",
+    });
+
+    const folderMatch = preview.previewText.match(/^Path: (.+)$/m);
+    const folderHint = folderMatch?.[1]?.replace(/\/[^/]+\.md$/, "") ?? undefined;
+
     setPendingObsidianSave({
       previewId: preview.id,
       summary: preview.previewText.slice(0, 200),
@@ -99,10 +130,55 @@ export async function offerObsidianSave(
     });
     return {
       previewId: preview.id,
-      offerLine: "💾 Save to Obsidian? Reply yes / no / edit: …",
+      offerLine: saveOfferLine(folderHint),
+      folderHint,
     };
   } catch (err) {
     console.error("[obsidian] offer save failed:", err);
+    return null;
+  }
+}
+
+/** Auto-save: preview + commit immediately. No yes/no. */
+export async function autoSaveToObsidian(
+  params: {
+    userMessage: string;
+    conversationTurns: ConversationTurn[];
+    actionContext?: string;
+    activeProject?: string | null;
+    projectName?: string | null;
+    saveIntent?: "capture" | "task" | "project_log" | "resource" | "daily_review";
+  }
+): Promise<{ paths: string[]; message: string } | null> {
+  try {
+    const sourceText = buildSaveSourceText({
+      userMessage: params.userMessage,
+      conversationTurns: params.conversationTurns,
+      actionContext: params.actionContext,
+      projectName: params.projectName ?? params.activeProject,
+    });
+
+    const preview = await createNotePreview(sourceText, {
+      activeProject: params.projectName ?? params.activeProject,
+      saveIntent: params.saveIntent ?? "project_log",
+    });
+
+    const result = await createNoteCommit(preview.id);
+    const paths = "paths" in result && Array.isArray(result.paths) ? result.paths : [result.path];
+    return {
+      paths,
+      message: formatAutoSaveMessage({
+        paths,
+        action: "action" in result ? (result.action as "merged" | "created") : "created",
+        message: result.message,
+        deletedDuplicates:
+          "deletedDuplicates" in result && Array.isArray(result.deletedDuplicates)
+            ? result.deletedDuplicates
+            : [],
+      }),
+    };
+  } catch (err) {
+    console.error("[obsidian] auto save failed:", err);
     return null;
   }
 }
@@ -111,4 +187,5 @@ export const OBSIDIAN_SAVE_OFFER_ACTIONS = new Set([
   "saved_project_update",
   "saved_knowledge",
   "saved_decision",
+  "evolving_project",
 ]);

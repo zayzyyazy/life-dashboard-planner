@@ -13,6 +13,7 @@ import {
   handleGitHubCommand,
   handleWatchRepoCommand,
   handleVaultCommand,
+  handleDedupeCommand,
   handleSearchCommand,
   handleAskCommand,
   HELP_MESSAGE,
@@ -29,6 +30,7 @@ import {
 } from "./voice.js";
 import { registerTelegramNotifierSplit } from "./notify.js";
 import { splitMessage } from "./split-message.js";
+import { formatTelegramError } from "./errors.js";
 
 let bot: TelegramBot | null = null;
 let lastPollingError = "";
@@ -139,6 +141,7 @@ export async function startTelegramBot(): Promise<TelegramBot | null> {
   bot
     .setMyCommands([
       { command: "vault", description: "Obsidian vault stats" },
+      { command: "dedupe", description: "Merge duplicate vault notes" },
       { command: "search", description: "Search your notes" },
       { command: "ask", description: "Ask over your notes" },
       { command: "brief", description: "Today's brief" },
@@ -165,7 +168,7 @@ export async function startTelegramBot(): Promise<TelegramBot | null> {
     } catch (err) {
       console.error("[telegram] Message handler error:", err instanceof Error ? err.message : err);
       if (msg.chat?.id) {
-        await safeReply(msg.chat.id, "Something went wrong. Please try again.");
+        await safeReply(msg.chat.id, formatTelegramError(err));
       }
     }
   });
@@ -275,6 +278,9 @@ async function handleCommand(msg: Message) {
       break;
     case "/vault":
       reply = await handleVaultCommand();
+      break;
+    case "/dedupe":
+      reply = await handleDedupeCommand();
       break;
     case "/search":
       reply = await handleSearchCommand(args);

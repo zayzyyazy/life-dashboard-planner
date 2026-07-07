@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { getPreviewsDir } from "../config.js";
 import type { NewNoteInput } from "../vault/writer.js";
 import type { OrganizeProposal } from "../ai/organize.js";
+import type { ExtraWrite } from "../routing/resolveDestinations.js";
 
 export type PreviewKind = "create_note" | "organize_note";
 
@@ -12,10 +13,11 @@ export interface CreateNotePreview {
   id: string;
   createdAt: string;
   rawInput: string;
-  noteInput: NewNoteInput;
+  noteInput: NewNoteInput & { confidence?: number; shortSummary?: string };
   relPath: string;
   duplicateWarnings: { path: string; title: string; score: number }[];
   structuredSummary: string;
+  extraWrites?: ExtraWrite[];
 }
 
 export interface OrganizeNotePreview {

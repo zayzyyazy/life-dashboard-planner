@@ -93,7 +93,11 @@ export function buildProjectMemoryContext(): string {
 }
 
 export async function buildRichContext(
-  _options: { source?: ContextSource; vaultExcerpt?: string | null } = {}
+  _options: {
+    source?: ContextSource;
+    vaultExcerpt?: string | null;
+    recallExcerpt?: string | null;
+  } = {}
 ): Promise<string> {
   const db = getDb();
   const today = new Date().toISOString().slice(0, 10);
@@ -187,6 +191,11 @@ export async function buildRichContext(
     for (const k of knowledge) {
       lines.push(`- [${k.domain}] ${k.title}: ${k.content.slice(0, 400)}`);
     }
+  }
+
+  if (_options.recallExcerpt?.trim()) {
+    lines.push("", "### Recall from your notes (cite these when relevant)");
+    lines.push(_options.recallExcerpt.trim());
   }
 
   if (_options.vaultExcerpt?.trim()) {

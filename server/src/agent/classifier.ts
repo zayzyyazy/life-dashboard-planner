@@ -68,13 +68,13 @@ Life domains — keep these separate:
 - general: facts about the user that apply everywhere
 
 Classify each message into exactly one type:
-- project_update: new info/status about a work project
+- project_update: new info/status about a work project OR a new personal tool/app they are building
 - task: actionable item with optional due date
 - task_complete: user finished something ("done with X", "mark X complete", "finished the API task")
 - reminder: time-based reminder ("remind me tomorrow", "ask me Friday") — NOT status updates like "in uni today until 17"
 - decision: a decision made or recorded
 - question: asking the agent something (status, what to focus on, advice)
-- profile_memory: user teaching you about themselves ("remember", "about me", "I study", "I work on", "for university", "know that I")
+- profile_memory: user teaching you about themselves ("remember", "about me", "I study", "I work on", "for university", "know that I") — NOT "I'm building a CLI/tool/app" (that's project work → general or project_update)
 - general_memory: other notes to remember (not about the user specifically)
 - watch_request: watch a GitHub repo or local folder
 - github_query: asking about GitHub activity ("what changed in my repos", "commits on X", "open PRs", "github status")

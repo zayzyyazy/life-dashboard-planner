@@ -5,6 +5,7 @@ import {
   searchVault,
 } from "./obsidian-brain.js";
 import { setPendingObsidianSave } from "./obsidian-save.js";
+import { inferActiveProjectFromMessage } from "./project-resolve.js";
 
 export interface VaultFastPathResult {
   reply: string;
@@ -37,7 +38,10 @@ export async function tryVaultFastPath(message: string): Promise<VaultFastPathRe
   if (saveMatch) {
     const raw = saveMatch[1].trim();
     try {
-      const preview = await createNotePreview(raw);
+      const preview = await createNotePreview(raw, {
+        activeProject: inferActiveProjectFromMessage(raw),
+        saveIntent: "capture",
+      });
       setPendingObsidianSave({
         previewId: preview.id,
         summary: preview.previewText.slice(0, 200),

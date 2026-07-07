@@ -72,8 +72,12 @@ export const config = {
   openai: {
     apiKey: cleanEnv(process.env.OPENAI_API_KEY),
     defaultModel: process.env.OPENAI_DEFAULT_MODEL ?? "gpt-4o-mini",
-    planningModel: process.env.OPENAI_PLANNING_MODEL ?? "gpt-4o",
+    planningModel: process.env.OPENAI_PLANNING_MODEL ?? "gpt-4o-mini",
     transcriptionModel: process.env.OPENAI_TRANSCRIPTION_MODEL ?? "whisper-1",
+  },
+  groq: {
+    apiKey: cleanEnv(process.env.GROQ_API_KEY),
+    transcriptionModel: process.env.GROQ_TRANSCRIPTION_MODEL ?? "whisper-large-v3-turbo",
   },
   email: {
     provider: (process.env.EMAIL_PROVIDER ?? "smtp") as "smtp" | "resend",

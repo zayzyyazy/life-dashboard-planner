@@ -1,6 +1,6 @@
 import type OpenAI from "openai";
 import { classifyMessage, type ClassificationResult } from "../agent/classifier.js";
-import { AGENT_VOICE, actionReplyAddon, telegramVoiceAddon, voiceMessageAddon } from "../agent/voice.js";
+import { AGENT_VOICE, actionReplyAddon, pendingSaveAddon, telegramVoiceAddon, voiceMessageAddon } from "../agent/voice.js";
 import { config } from "../config.js";
 import { chatCompletion } from "./openai.js";
 import {
@@ -16,11 +16,23 @@ import {
 import { formatPersonalContextForPrompt } from "./profile.js";
 import { askBrain } from "./obsidian-brain.js";
 import {
-  OBSIDIAN_SAVE_OFFER_ACTIONS,
   offerObsidianSave,
+  autoSaveToObsidian,
   tryHandleObsidianPending,
 } from "./obsidian-save.js";
 import { tryVaultFastPath } from "./vault-fast-path.js";
+import { autoRecallContext, recallAddon } from "./recall-context.js";
+import { inferActiveProjectFromMessage } from "./project-resolve.js";
+import {
+  shouldOfferObsidianSave,
+  shouldAutoSaveToObsidian,
+  shouldConfirmObsidianSave,
+  stripFalseSaveClaims,
+  stripSaveFooters,
+  normalizeProjectName,
+  extractProjectNameFromThread,
+  buildThreadActionContext,
+} from "./save-context.js";
 
 export interface ChatResult {
   reply: string;
@@ -59,7 +71,13 @@ function buildSystemPrompt(
   personal: string,
   context: string,
   replyStyle: ReplyStyle,
-  options: { actionContext?: string; isVoice?: boolean } = {}
+  options: {
+    actionContext?: string;
+    isVoice?: boolean;
+    recallExcerpt?: string | null;
+    willOfferSave?: boolean;
+    willAutoSave?: boolean;
+  } = {}
 ): string {
   let mode = replyStyle === "short" ? `\n\n${telegramVoiceAddon()}` : "";
   if (options.isVoice) {
@@ -67,8 +85,14 @@ function buildSystemPrompt(
   }
 
   const actionBlock = options.actionContext ? actionReplyAddon(options.actionContext) : "";
+  if (options.willAutoSave) {
+    mode += `\n\nAfter your reply, the conversation will be AUTO-SAVED to Obsidian (Projects + Building). You may briefly confirm what was captured — do NOT ask the user to say yes/no.`;
+  } else if (options.willOfferSave) {
+    mode += `\n\n${pendingSaveAddon().trim()}`;
+  }
+  const recallBlock = recallAddon(options.recallExcerpt ?? null);
 
-  return `${AGENT_VOICE}${mode}
+  return `${AGENT_VOICE}${mode}${recallBlock}
 
 ${personal}
 
@@ -194,10 +218,18 @@ export async function processChat(
   const handled = await handleClassification(message, classification, {
     replyStyle,
     updateSource,
+    recentTurns: historyBefore,
   });
 
   let reply = handled.reply;
   let vaultExcerpt: string | null = null;
+  let recallExcerpt: string | null = null;
+
+  try {
+    recallExcerpt = await autoRecallContext(message, classification.classification);
+  } catch (err) {
+    console.warn("[recall] autoRecall failed:", err);
+  }
 
   if (classification.classification === "question" && config.openai.apiKey) {
     try {
@@ -207,20 +239,50 @@ export async function processChat(
     }
   }
 
+  const conversationForSave = getRecentConversation(historyLimit(source, messageType), {
+    excludeLatest: true,
+  });
+
+  const threadProject = normalizeProjectName(
+    extractProjectNameFromThread(message, conversationForSave) ??
+      inferActiveProjectFromMessage(message) ??
+      classification.project_name
+  );
+
+  const shouldAutoSave = shouldAutoSaveToObsidian(
+    classification.classification,
+    message,
+    conversationForSave,
+    handled.actions
+  );
+
+  const shouldConfirmSave =
+    !shouldAutoSave &&
+    (shouldConfirmObsidianSave(handled.actions) ||
+      shouldOfferObsidianSave(
+        classification.classification,
+        message,
+        conversationForSave,
+        handled.actions
+      ));
+
   if (!reply) {
-    const context = await buildContext({ source, vaultExcerpt });
+    const context = await buildContext({
+      source,
+      vaultExcerpt,
+      recallExcerpt,
+    });
     const personal = formatPersonalContextForPrompt();
     const systemPrompt = buildSystemPrompt(personal, context, replyStyle, {
       actionContext: handled.actionContext,
       isVoice: messageType === "voice",
-    });
-
-    const conversationHistory = getRecentConversation(historyLimit(source, messageType), {
-      excludeLatest: true,
+      recallExcerpt,
+      willAutoSave: shouldAutoSave,
+      willOfferSave: shouldConfirmSave,
     });
 
     reply = await chatCompletion(
-      [{ role: "system", content: systemPrompt }, ...toChatMessages(conversationHistory, message)],
+      [{ role: "system", content: systemPrompt }, ...toChatMessages(conversationForSave, message)],
       {
         tier: usesPlanningModel(classification.classification, Boolean(handled.actionContext))
           ? "planning"
@@ -230,10 +292,37 @@ export async function processChat(
     );
   }
 
-  // Offer Obsidian save after meaningful actions
-  const shouldOfferSave = handled.actions.some((a) => OBSIDIAN_SAVE_OFFER_ACTIONS.has(a));
-  if (shouldOfferSave && handled.actionContext) {
-    const offer = await offerObsidianSave(handled.actionContext);
+  if ((shouldAutoSave || shouldConfirmSave) && reply && !shouldAutoSave) {
+    reply = stripFalseSaveClaims(reply);
+  }
+
+  const saveParams = {
+    userMessage: message,
+    conversationTurns: conversationForSave,
+    actionContext:
+      handled.actionContext ??
+      buildThreadActionContext(message, conversationForSave, threadProject),
+    activeProject: threadProject,
+    projectName: threadProject,
+    saveIntent: (handled.actions.includes("saved_project_update") ||
+    handled.actions.includes("evolving_project")
+      ? "project_log"
+      : "capture") as "capture" | "project_log",
+  };
+
+  if (shouldAutoSave) {
+    const saved = await autoSaveToObsidian(saveParams);
+    if (saved) {
+      reply = stripSaveFooters(stripFalseSaveClaims(reply ?? ""));
+      reply = reply ? `${reply}\n\n${saved.message}` : saved.message;
+      handled.actions.push("auto_saved_obsidian");
+    } else {
+      reply = reply
+        ? `${reply}\n\n(Couldn't auto-save to Obsidian — try: save: your notes here)`
+        : "Couldn't auto-save to Obsidian.";
+    }
+  } else if (shouldConfirmSave) {
+    const offer = await offerObsidianSave(saveParams);
     if (offer) {
       reply = reply ? `${reply}\n\n${offer.offerLine}` : offer.offerLine;
     }

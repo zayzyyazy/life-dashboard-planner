@@ -7,6 +7,13 @@ import {
 } from "./profile.js";
 import { isLifeDomain, type LifeDomain } from "../types/domains.js";
 import { buildRichContext } from "./context-builder.js";
+import { resolveProject, resolveProjectMatches, formatProjectClarification } from "./project-resolve.js";
+import { appendObsidianTask } from "./obsidian-tasks.js";
+import {
+  looksLikeNewBuildingProject,
+  extractProjectNameFromThread,
+  buildThreadActionContext,
+} from "./save-context.js";
 import { normalizeDueAt, parseDueDate, formatDueForUser, formatReminderConfirmation, extractReminderContent, looksLikeStatusUpdate } from "../agent/parse-due.js";
 
 export type MessageSource = "dashboard" | "telegram" | "api";
@@ -170,23 +177,7 @@ export function listOpenTasksForClassifier(): string {
 }
 
 export function findProjectId(name: string | null): number | null {
-  if (!name) return null;
-  const db = getDb();
-  const exact = db
-    .prepare("SELECT id FROM projects WHERE name = ? COLLATE NOCASE")
-    .get(name) as { id: number } | undefined;
-  if (exact) return exact.id;
-
-  const fuzzy = db
-    .prepare("SELECT id, name FROM projects")
-    .all() as { id: number; name: string }[];
-  const lower = name.toLowerCase();
-  const match = fuzzy.find(
-    (p) =>
-      p.name.toLowerCase().includes(lower) ||
-      lower.includes(p.name.toLowerCase().split("/")[0].trim())
-  );
-  return match?.id ?? null;
+  return resolveProject(name)?.id ?? null;
 }
 
 export function listProjectNames(): string {
@@ -220,7 +211,11 @@ export type ReplyStyle = "normal" | "short";
 export async function handleClassification(
   message: string,
   result: ClassificationResult,
-  options: { replyStyle?: ReplyStyle; updateSource?: string } = {}
+  options: {
+    replyStyle?: ReplyStyle;
+    updateSource?: string;
+    recentTurns?: ConversationTurn[];
+  } = {}
 ): Promise<{ reply: string; actions: string[]; actionContext?: string }> {
   const db = getDb();
   const actions: string[] = [];
@@ -228,6 +223,7 @@ export async function handleClassification(
   const { extracted } = result;
   const short = options.replyStyle === "short";
   const updateSource = options.updateSource ?? "chat";
+  const recentTurns = options.recentTurns ?? [];
 
   if (result.needs_clarification && result.clarification_question) {
     if (result.classification === "reminder" && result.extracted.content) {
@@ -238,26 +234,76 @@ export async function handleClassification(
 
   switch (result.classification) {
     case "project_update": {
-      if (!projectId) {
+      const matches = resolveProjectMatches(result.project_name ?? message);
+      const resolved = resolveProject(result.project_name ?? message);
+      const pid = resolved?.id ?? projectId;
+      const content = extracted.content ?? message;
+      const threadProject = extractProjectNameFromThread(message, recentTurns);
+      const unknownNamedProject =
+        Boolean(result.project_name?.trim()) && !findProjectId(result.project_name);
+
+      // New or unknown project — auto-save to Obsidian, never ask to pick from sqlite list
+      if (
+        !pid &&
+        (looksLikeNewBuildingProject(message, recentTurns) ||
+          threadProject ||
+          unknownNamedProject)
+      ) {
+        const name =
+          threadProject ?? result.project_name ?? extracted.title ?? "Personal build";
+        actions.push("evolving_project");
+        return {
+          reply: "",
+          actions,
+          actionContext: `Building project "${name}": ${content.slice(0, 600)}`,
+        };
+      }
+
+      if (!pid && matches.length > 1) {
         return {
           reply: short
-            ? `Which project? ${listProjectNames()}`
-            : `Which project should I attach this to? (${listProjectNames()})`,
+            ? formatProjectClarification(matches)
+            : formatProjectClarification(matches),
           actions,
+        };
+      }
+      if (!pid) {
+        if (looksLikeNewBuildingProject(message, recentTurns)) {
+          actions.push("evolving_project");
+          return {
+            reply: "",
+            actions,
+            actionContext: `Project discussion: ${content.slice(0, 600)}`,
+          };
+        }
+        // Explicit "add to X" with no match — ask once
+        if (/\badd (this|that) to\b/i.test(message)) {
+          return {
+            reply: short
+              ? `Which project? ${listProjectNames()}`
+              : `Which project should I attach this to? (${listProjectNames()})`,
+            actions,
+          };
+        }
+        // Generic project chatter — treat as new evolving project
+        actions.push("evolving_project");
+        return {
+          reply: "",
+          actions,
+          actionContext: `Project discussion: ${content.slice(0, 600)}`,
         };
       }
       db.prepare(
         "INSERT INTO project_updates (project_id, source, title, content) VALUES (?, ?, ?, ?)"
       ).run(
-        projectId,
+        pid,
         updateSource,
         extracted.title ?? "Update",
         extracted.content ?? message
       );
-      db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(projectId);
+      db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(pid);
       actions.push("saved_project_update");
-      const projectLabel = result.project_name ?? "project";
-      const content = extracted.content ?? message;
+      const projectLabel = resolved?.name ?? result.project_name ?? "project";
       return {
         reply: "",
         actions,
@@ -282,6 +328,11 @@ export async function handleClassification(
       const title = extracted.title ?? message.slice(0, 120);
       const dueNote = dueDate ? ` (due ${formatShortDate(dueDate)})` : "";
       const blockedNote = extracted.blocked_reason ? ` [blocked: ${extracted.blocked_reason}]` : "";
+      void appendObsidianTask({
+        title,
+        dueDate,
+        projectName: result.project_name,
+      });
       return {
         reply: "",
         actions,
@@ -343,6 +394,12 @@ export async function handleClassification(
       actions.push("created_reminder");
       setSetting("pending_reminder_draft", "");
 
+      void appendObsidianTask({
+        title: reminderText,
+        dueDate: dueAt,
+        projectName: result.project_name,
+      });
+
       // Fire immediately if already due (or check within seconds)
       const { processDueReminders } = await import("./reminders.js");
       void processDueReminders().catch(console.error);
@@ -394,6 +451,19 @@ export async function handleClassification(
     }
 
     case "decision": {
+      if (looksLikeNewBuildingProject(message, recentTurns)) {
+        const name =
+          extractProjectNameFromThread(message, recentTurns) ??
+          extracted.title ??
+          result.project_name ??
+          "Personal build";
+        actions.push("evolving_project");
+        return {
+          reply: "",
+          actions,
+          actionContext: `Building project "${name}": ${(extracted.content ?? message).slice(0, 600)}`,
+        };
+      }
       db.prepare(
         "INSERT INTO decisions (project_id, title, rationale) VALUES (?, ?, ?)"
       ).run(projectId, extracted.title ?? "Decision", extracted.content ?? message);
@@ -439,10 +509,11 @@ export async function handleClassification(
             actions,
           };
         } catch (err) {
-          return {
-            reply: `Couldn't watch folder: ${err instanceof Error ? err.message : "unknown error"}`,
-            actions,
-          };
+          const msg = err instanceof Error ? err.message : "unknown error";
+          const friendly = msg.includes("does not exist")
+            ? "That folder doesn't exist on this machine. Local folder watching only works on your Mac — use GitHub repo watching or save to Obsidian instead."
+            : `Couldn't watch folder: ${msg}`;
+          return { reply: friendly, actions };
         }
       }
       return {
@@ -498,11 +569,29 @@ export async function handleClassification(
           actions,
         };
       }
-      return { reply: "", actions };
+      return {
+        reply: short
+          ? "Hey — what's on your mind?"
+          : "Hey — I'm here. Text or voice me anytime.",
+        actions,
+      };
     }
 
     case "profile_memory":
     case "general_memory": {
+      // Building a new tool/app is a project thread, not a profile fact
+      if (looksLikeNewBuildingProject(message, recentTurns)) {
+        const name =
+          extractProjectNameFromThread(message, recentTurns) ??
+          extracted.title ??
+          "Personal build";
+        actions.push("evolving_project");
+        return {
+          reply: "",
+          actions,
+          actionContext: `Building project "${name}": ${(extracted.content ?? message).slice(0, 600)}`,
+        };
+      }
       const domain = resolveLifeDomain(result, message);
       const title = extracted.title ?? "Note";
       const content = extracted.content ?? message;
@@ -516,19 +605,37 @@ export async function handleClassification(
       return {
         reply: "",
         actions,
-        actionContext: `Saved to ${domainLabel(domain)} knowledge — ${title}: ${content.slice(0, 300)}`,
+        actionContext: `${domainLabel(domain)} — ${title}: ${content.slice(0, 500)}`,
       };
     }
 
     case "question":
-    case "general_memory":
     case "general":
-    default:
+    default: {
+      if (
+        looksLikeNewBuildingProject(message, recentTurns) &&
+        recentTurns.filter((t) => t.role === "user").length >= 1
+      ) {
+        const name = extractProjectNameFromThread(message, recentTurns);
+        actions.push("evolving_project");
+        return {
+          reply: "",
+          actions,
+          actionContext: buildThreadActionContext(message, recentTurns, name),
+        };
+      }
       return { reply: "", actions };
+    }
   }
 }
 
-export async function buildContext(options: { source?: MessageSource; vaultExcerpt?: string | null } = {}): Promise<string> {
+export async function buildContext(
+  options: {
+    source?: MessageSource;
+    vaultExcerpt?: string | null;
+    recallExcerpt?: string | null;
+  } = {}
+): Promise<string> {
   return buildRichContext(options);
 }
 

@@ -4,8 +4,6 @@ status: inbox
 source: capture
 ---
 
-## Capture
+## Summary
 
-
-## Next steps
-- [ ]
+## Next
