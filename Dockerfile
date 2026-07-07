@@ -23,6 +23,7 @@ COPY . .
 RUN npm run build
 
 ENV NODE_ENV=production
+ENV HOST=0.0.0.0
 ENV DATA_DIR=/app/data
 ENV VAULT_PATH=/app/data/Brain-Vault
 ENV BRAIN_DATA_DIR=/app/data/brain

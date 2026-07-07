@@ -104,7 +104,8 @@ process.on("unhandledRejection", (err) => {
   console.error("[fatal]", err);
 });
 
-const host = process.env.HOST ?? "127.0.0.1";
+const host =
+  process.env.HOST ?? (process.env.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1");
 app.listen(config.port, host, () => {
   const envStatus = getEnvStatus();
   console.log(`Life Planner Agent running at http://${host}:${config.port}`);
