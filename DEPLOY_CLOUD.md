@@ -85,15 +85,25 @@ git push -u origin main
 #    VAULT_GIT_REMOTE=https://github.com/YOU/brain-vault.git
 ```
 
-### Daily sync on Mac
+### Daily sync on Mac (automated)
 
-After Telegram saves notes on cloud:
+**Option A — background sync (recommended):** runs every 3 minutes while your Mac is on:
 
 ```bash
-cd ~/Documents/Brain-Vault && git pull
+cd ~/life-dashboard-planner
+npm run install:vault-sync
 ```
 
-Or install the **Obsidian Git** plugin → pull on vault open.
+Pulls cloud saves from GitHub and pushes any edits you made in Obsidian. Log: `~/Library/Logs/brain-vault-sync.log`
+
+**Option B — Obsidian Git plugin:** Community plugin → enable **Pull on startup** + **Pull every 5 minutes** + **Push every 10 minutes**.
+
+Manual one-off:
+
+```bash
+npm run sync:vault
+# or: cd ~/Documents/Brain-Vault && git pull
+```
 
 Cloud auto-commits and pushes after each Obsidian save when `VAULT_GIT_SYNC=true`.
 

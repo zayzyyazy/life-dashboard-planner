@@ -21,6 +21,8 @@
     "start": "node scripts/ensure-deps.mjs && npm run build:dashboard && npm run start --prefix server",
     "start:daemon": "bash scripts/start-daemon.sh",
     "install:daemon": "bash scripts/install-launchagent.sh",
+    "sync:vault": "bash scripts/sync-brain-vault.sh",
+    "install:vault-sync": "bash scripts/install-brain-vault-sync.sh",
     "migrate:off-desktop": "bash scripts/migrate-off-desktop.sh",
     "test:daemon": "bash scripts/test-daemon.sh",
     "docker:up": "docker compose up -d --build",
