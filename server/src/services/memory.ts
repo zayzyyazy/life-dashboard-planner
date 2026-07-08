@@ -1,4 +1,5 @@
 import { getDb, setSetting } from "../db/index.js";
+import { config } from "../config.js";
 import type { ClassificationResult } from "../agent/classifier.js";
 import {
   addKnowledge,
@@ -16,7 +17,7 @@ import {
   extractProjectNameFromThread,
   buildThreadActionContext,
 } from "./save-context.js";
-import { normalizeDueAt, parseDueDate, formatDueForUser, formatReminderConfirmation, extractReminderContent, looksLikeStatusUpdate } from "../agent/parse-due.js";
+import { normalizeDueAt, parseDueDate, formatDueForUser, formatReminderConfirmation, extractReminderContent, looksLikeStatusUpdate, parseDailyReminderSchedule, buildDailyReminderDates } from "../agent/parse-due.js";
 
 export type MessageSource = "dashboard" | "telegram" | "api";
 export type MessageType = "text" | "voice" | "command";
@@ -371,11 +372,37 @@ export async function handleClassification(
           content: message,
           source: updateSource,
         });
-        actions.push("saved_knowledge");
+        actions.push("saved_profile_memory");
         return {
           reply: "",
           actions,
           actionContext: `Status/availability (NOT a reminder): ${message}`,
+        };
+      }
+
+      const daily = parseDailyReminderSchedule(message);
+      if (daily) {
+        const dates = buildDailyReminderDates(daily);
+        const reminderText = daily.message;
+        for (const dueAt of dates) {
+          db.prepare(
+            "INSERT INTO reminders (project_id, message, due_at) VALUES (?, ?, ?)"
+          ).run(projectId, reminderText, dueAt);
+        }
+        actions.push("created_reminder");
+        setSetting("pending_reminder_draft", "");
+        setSetting(
+          "daily_study_reminder",
+          JSON.stringify({ hour: daily.hour, minute: daily.minute, message: reminderText })
+        );
+
+        const first = dates[0]!;
+        const when = formatReminderConfirmation(first);
+        return {
+          reply: short
+            ? `Daily reminders set — ${dates.length}× at ${daily.hour}:${String(daily.minute).padStart(2, "0")}, first ${when}.`
+            : `Set ${dates.length} daily reminders at ${daily.hour}:${String(daily.minute).padStart(2, "0")} (${config.brief.timezone}). First: ${when} — "${reminderText}"`,
+          actions,
         };
       }
 

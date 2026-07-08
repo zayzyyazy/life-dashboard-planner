@@ -238,6 +238,15 @@ export async function processChat(
     } catch (err) {
       console.warn("[obsidian] askBrain failed:", err);
     }
+  } else if (
+    config.openai.apiKey &&
+    /\b(what did we|what have i|yesterday|blocked|study plan|themen|lecture)\b/i.test(message)
+  ) {
+    try {
+      vaultExcerpt = await askBrain(message);
+    } catch (err) {
+      console.warn("[obsidian] askBrain failed:", err);
+    }
   }
 
   const conversationForSave = getRecentConversation(historyLimit(source, messageType), {
@@ -331,12 +340,8 @@ export async function processChat(
 
   if (handled.actions.includes("saved_profile_memory")) {
     try {
-      const paths = await syncProfileToObsidian();
-      const personalPaths = paths.filter((p) => p.includes("02-Areas/Personal"));
-      const note =
-        personalPaths.length > 0
-          ? `📝 Saved to your profile in Obsidian:\n${personalPaths.map((p) => `- ${p}`).join("\n")}`
-          : "📝 Saved to your agent profile (Obsidian Personal folder).";
+      await syncProfileToObsidian();
+      const note = "📝 Noted — saved to your profile (02-Areas/Personal/About-Me.md).";
       reply = reply ? `${reply}\n\n${note}` : note;
     } catch (err) {
       console.warn("[profile-obsidian] chat sync failed:", err);

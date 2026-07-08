@@ -14,7 +14,15 @@ const RECALL_CLASSIFICATIONS = new Set([
   "greeting",
 ]);
 
-export function shouldAutoRecall(classification: string): boolean {
+export function shouldAutoRecall(classification: string, message: string): boolean {
+  const m = message.toLowerCase();
+  if (
+    /\b(blocked|why blocked|yesterday|what did we|what have i|remind|exam|study plan|presentation|tasks?|priorit|today)\b/.test(
+      m
+    )
+  ) {
+    return true;
+  }
   return RECALL_CLASSIFICATIONS.has(classification);
 }
 
@@ -71,7 +79,7 @@ export async function autoRecallContext(
   message: string,
   classification: string
 ): Promise<string | null> {
-  if (!shouldAutoRecall(classification)) return null;
+  if (!shouldAutoRecall(classification, message)) return null;
 
   const query = buildSearchQuery(message);
   if (query.length < 4) return null;

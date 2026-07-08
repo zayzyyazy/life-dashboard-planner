@@ -303,6 +303,7 @@ export function formatReminderConfirmation(iso: string): string {
 export function extractReminderContent(message: string): string {
   return message
     .replace(/^remind\s+me\s+(to\s+)?/i, "")
+    .replace(/\b(?:every\s*day|everyday|daily)\b/gi, "")
     .replace(/\b(?:on\s+)?(?:next\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi, "")
     .replace(/\b(?:tomorrow|today)\b/gi, "")
     .replace(/\bin\s+\d+\s*(?:min|mins|minute|minutes|hour|hours|hr|hrs)\b/gi, "")
@@ -311,6 +312,79 @@ export function extractReminderContent(message: string): string {
     .replace(/\b\d{1,2}:\d{2}\b/g, "")
     .replace(/^\s*to\s+/i, "")
     .trim() || message.trim();
+}
+
+export interface DailyReminderSchedule {
+  message: string;
+  hour: number;
+  minute: number;
+  days: number;
+}
+
+/** "remind me every day at 14" / "daily at 2pm for 10 days until exam" */
+export function parseDailyReminderSchedule(
+  message: string,
+  now = new Date()
+): DailyReminderSchedule | null {
+  const text = message.toLowerCase();
+  if (!/\b(every\s*day|everyday|daily)\b/.test(text)) return null;
+
+  let hour = 14;
+  let minute = 0;
+
+  const timeMatch =
+    text.match(/\bat\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/) ??
+    text.match(/\b(?:lets? do it|do)\s+(\d{1,2})\b/) ??
+    text.match(/\b(\d{1,2})\s*(am|pm)\b/);
+
+  if (timeMatch) {
+    hour = parseInt(timeMatch[1], 10);
+    if (timeMatch[2] && /^\d{2}$/.test(timeMatch[2])) {
+      minute = parseInt(timeMatch[2], 10);
+    }
+    const ampm = timeMatch[3]?.toLowerCase() ?? timeMatch[2]?.toLowerCase();
+    if (ampm === "pm" && hour < 12) hour += 12;
+    if (ampm === "am" && hour === 12) hour = 0;
+  }
+
+  let days = 10;
+  const untilExam = text.match(/\b(\d+)\s+days?\s+until\b/);
+  const daysNum = text.match(/\bfor\s+(\d+)\s+days?\b/) ?? text.match(/\b(\d+)\s+days?\b/);
+  if (untilExam) days = parseInt(untilExam[1], 10);
+  else if (daysNum) days = parseInt(daysNum[1], 10);
+  days = Math.min(30, Math.max(1, days));
+
+  let content =
+    extractReminderContent(message).replace(/\bwith\s+statistik\b/i, "study statistics").trim() ||
+    "Daily study reminder — statistics exam prep";
+
+  if (/\bstatistik|statistics|exam\b/i.test(message) && !/study/i.test(content)) {
+    content = "Study statistics — daily exam prep";
+  }
+
+  void now;
+  return { message: content, hour, minute, days };
+}
+
+export function buildDailyReminderDates(
+  schedule: DailyReminderSchedule,
+  now = new Date()
+): string[] {
+  const dates: string[] = [];
+  for (let i = 0; i < schedule.days; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + i);
+    d.setHours(schedule.hour, schedule.minute, 0, 0);
+    if (d.getTime() <= now.getTime()) continue;
+    dates.push(d.toISOString());
+  }
+  if (dates.length === 0) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + 1);
+    d.setHours(schedule.hour, schedule.minute, 0, 0);
+    dates.push(d.toISOString());
+  }
+  return dates;
 }
 
 export function looksLikeReminder(message: string): boolean {
@@ -322,6 +396,7 @@ export function looksLikeReminder(message: string): boolean {
   return (
     /^remind\s+me\b/.test(t) ||
     /\bremind\s+me\s+(to|about|at|in|on)\b/.test(t) ||
+    /\b(every\s*day|everyday|daily)\b/.test(t) ||
     (/\b(remind|remember)\b/.test(t) && /\bin\s+\d+\s*min/.test(t)) ||
     (hasWeekday && hasClock && /\b(remind|reminder)\b/.test(t)) ||
     (/\b(call|text|ping)\b/.test(t) && (hasWeekday || hasClock) && /\b(remind|at|on)\b/.test(t))

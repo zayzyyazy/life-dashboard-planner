@@ -1,10 +1,9 @@
 import {
   askBrain,
-  createNotePreview,
   formatSearchResults,
   searchVault,
 } from "./obsidian-brain.js";
-import { setPendingObsidianSave } from "./obsidian-save.js";
+import { autoSaveToObsidian } from "./obsidian-save.js";
 import { inferActiveProjectFromMessage } from "./project-resolve.js";
 
 export interface VaultFastPathResult {
@@ -38,25 +37,21 @@ export async function tryVaultFastPath(message: string): Promise<VaultFastPathRe
   if (saveMatch) {
     const raw = saveMatch[1].trim();
     try {
-      const preview = await createNotePreview(raw, {
+      const saved = await autoSaveToObsidian({
+        userMessage: raw,
+        conversationTurns: [],
         activeProject: inferActiveProjectFromMessage(raw),
+        projectName: inferActiveProjectFromMessage(raw),
         saveIntent: "capture",
       });
-      setPendingObsidianSave({
-        previewId: preview.id,
-        summary: preview.previewText.slice(0, 200),
-        sourceText: raw,
-        createdAt: new Date().toISOString(),
-      });
-      const body = preview.previewText.slice(0, 700);
-      return {
-        handled: true,
-        reply: `${body}\n\n💾 Save to Obsidian? Reply yes / no / edit: …`,
-      };
+      if (saved) {
+        return { handled: true, reply: saved.message };
+      }
+      return { handled: true, reply: "Couldn't save — check Railway logs for vault/git errors." };
     } catch (err) {
       return {
         handled: true,
-        reply: `Couldn't create preview: ${err instanceof Error ? err.message : "unknown"}`,
+        reply: `Couldn't save: ${err instanceof Error ? err.message : "unknown"}`,
       };
     }
   }

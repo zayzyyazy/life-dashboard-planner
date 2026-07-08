@@ -63,47 +63,24 @@ export const OBSIDIAN_SAVE_TRIGGER_ACTIONS = new Set([
   "evolving_project",
 ]);
 
-/** Detect substantive project/building thread worth saving to Obsidian. */
+/** Only offer Obsidian save when the user explicitly asks — not on every chat. */
 export function shouldOfferObsidianSave(
   classification: string,
   message: string,
   history: ConversationTurn[],
   actions: string[] = []
 ): boolean {
-  if (actions.some((a) => OBSIDIAN_SAVE_TRIGGER_ACTIONS.has(a))) return true;
-  if (SKIP_SAVE_CLASSIFICATIONS.has(classification)) return false;
-  if (!SAVE_ELIGIBLE.has(classification)) return false;
-
-  const combined = [message, ...history.slice(-12).map((t) => t.content)].join(" ");
-  if (!SAVE_SIGNAL.test(combined)) return false;
-
-  // Pure math / hours calculation with no ongoing project thread
-  if (
-    classification === "general" &&
-    /\b\d+\s*hours?\b/i.test(combined) &&
-    !/\b(build|cli|tool|project|detective|health|app)\b/i.test(combined)
-  ) {
-    return false;
-  }
-
-  const userTurns = [...history.filter((t) => t.role === "user"), { role: "user", content: message }];
-  const userTurnCount = userTurns.length;
-
-  // Multi-turn project conversation — offer save even if latest message is short
-  if (userTurnCount >= 2 && SAVE_SIGNAL.test(combined)) return true;
-
-  // Single substantial dump
-  if (combined.length >= 120 && SAVE_SIGNAL.test(combined)) return true;
-
-  // project_update / memory always worth offering when signal present
-  if (
-    (classification === "project_update" || classification === "general_memory") &&
-    SAVE_SIGNAL.test(combined)
-  ) {
-    return true;
-  }
-
+  if (explicitSaveRequested(message)) return true;
+  if (actions.includes("saved_project_update")) return true;
   return false;
+}
+
+export function explicitSaveRequested(message: string): boolean {
+  const t = message.trim();
+  return (
+    /^(save to obsidian:|save:)\s+/i.test(t) ||
+    /\b(save this to (my )?notes|save this to obsidian|write this to obsidian)\b/i.test(t)
+  );
 }
 
 /** @deprecated use shouldOfferObsidianSave */
@@ -170,8 +147,7 @@ export function shouldAutoSaveToObsidian(
 
 /** Only explicit save: commands need confirmation. Profile facts sync to Personal/ directly. */
 export function shouldConfirmObsidianSave(actions: string[] = []): boolean {
-  if (actions.some((a) => a === "saved_profile_memory")) return false;
-  return actions.some((a) => a === "saved_knowledge" || a === "saved_decision");
+  return actions.includes("saved_project_update");
 }
 
 export function saveOfferLine(hint?: string): string {

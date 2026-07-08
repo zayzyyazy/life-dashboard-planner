@@ -43,8 +43,8 @@ function looksLikeYes(message: string): boolean {
 
 function looksLikeNo(message: string): boolean {
   const trimmed = message.trim();
-  if (trimmed.length > 20) return false;
-  return /^(no|n|nope|skip|cancel|don't|dont)[\s!.]*$/i.test(trimmed);
+  if (trimmed.length > 12) return false;
+  return /^(no|n|nope|skip|cancel)[\s!.]*$/i.test(trimmed);
 }
 
 function looksLikeEdit(message: string): boolean {
