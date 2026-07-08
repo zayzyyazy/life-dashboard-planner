@@ -1,0 +1,26 @@
+# fly.toml — deploy with: fly launch && fly secrets import < .env && fly deploy
+app = "life-planner-agent"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  DATA_DIR = "/app/data"
+  NODE_ENV = "production"
+
+[http_service]
+  internal_port = 3847
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    path = "/health"
+
+[[mounts]]
+  source = "life_planner_data"
+  destination = "/app/data"

@@ -1,0 +1,16 @@
+services:
+  agent:
+    build: .
+    ports:
+      - "3847:3847"
+    env_file:
+      - .env
+    environment:
+      DATA_DIR: /app/data
+      PORT: 3847
+    volumes:
+      - life-planner-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  life-planner-data:

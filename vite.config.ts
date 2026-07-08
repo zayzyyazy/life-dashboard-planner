@@ -1,27 +1,26 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-const host = process.env.TAURI_DEV_HOST;
-
-// https://v2.tauri.app/start/frontend/vite/
 export default defineConfig({
   plugins: [react()],
-  define: {
-    __APP_BUILD_STAMP__: JSON.stringify(new Date().toISOString()),
-  },
-  clearScreen: false,
-  envPrefix: ["VITE_", "TAURI_ENV_"],
-  build: {
-    target:
-      process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari13",
-    minify: process.env.TAURI_ENV_DEBUG ? false : "esbuild",
-    sourcemap: !!process.env.TAURI_ENV_DEBUG,
-  },
   server: {
-    port: 5174,
-    strictPort: true,
-    host: host || false,
-    hmr: host ? { protocol: "ws", host, port: 5175 } : undefined,
-    watch: { ignored: ["**/src-tauri/**"] },
+    port: 5173,
+    proxy: {
+      "/chat": "http://localhost:3847",
+      "/capture": "http://localhost:3847",
+      "/projects": "http://localhost:3847",
+      "/tasks": "http://localhost:3847",
+      "/reminders": "http://localhost:3847",
+      "/github": "http://localhost:3847",
+      "/watch": "http://localhost:3847",
+      "/updates": "http://localhost:3847",
+      "/messages": "http://localhost:3847",
+      "/brief": "http://localhost:3847",
+      "/email": "http://localhost:3847",
+      "/telegram": "http://localhost:3847",
+      "/profile": "http://localhost:3847",
+      "/knowledge": "http://localhost:3847",
+      "/health": "http://localhost:3847",
+    },
   },
 });
