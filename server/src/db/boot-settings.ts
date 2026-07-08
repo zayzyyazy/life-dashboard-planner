@@ -4,15 +4,20 @@ import { enableReminders } from "../services/reminders.js";
 import { ensureMissingKnowledgeSeed, seedProfileIfEmpty } from "../services/profile.js";
 import { seedProjectKnowledgeIfEmpty } from "../services/agent-knowledge.js";
 
-/** Ensure reminders/brief are on even if setup never completed. */
+/** Ensure reminders on by default; brief only if explicitly enabled in env. */
 export function ensureBootSettings(): void {
   if (config.reminders.enabledByDefault && getSetting("reminders_enabled") !== "true") {
     enableReminders();
     console.log("[boot] Reminders enabled");
   }
-  if (config.brief.enabledByDefault && getSetting("daily_brief_enabled") !== "true") {
-    setSetting("daily_brief_enabled", "true");
-    console.log("[boot] Daily brief enabled");
+  if (config.brief.enabledByDefault) {
+    if (getSetting("daily_brief_enabled") !== "true") {
+      setSetting("daily_brief_enabled", "true");
+      console.log("[boot] Daily brief enabled");
+    }
+  } else if (getSetting("daily_brief_enabled") === "true") {
+    setSetting("daily_brief_enabled", "false");
+    console.log("[boot] Daily brief disabled (opt-in only)");
   }
   const added = ensureMissingKnowledgeSeed();
   if (added > 0) {

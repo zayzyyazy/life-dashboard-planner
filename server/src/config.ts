@@ -110,7 +110,7 @@ export const config = {
   brief: {
     cron: process.env.DAILY_BRIEF_CRON ?? "0 7 * * *",
     timezone: resolveTimezone(process.env.TZ),
-    enabledByDefault: process.env.DAILY_BRIEF_ENABLED !== "false",
+    enabledByDefault: envFlag(process.env.DAILY_BRIEF_ENABLED),
   },
   reminders: {
     enabledByDefault: process.env.REMINDERS_ENABLED !== "false",
@@ -123,7 +123,7 @@ export const config = {
     checkCron: process.env.IDLE_NUDGE_CHECK_CRON ?? "*/15 * * * *",
   },
   proactive: {
-    morningEnabled: process.env.MORNING_OUTREACH_ENABLED !== "false",
+    morningEnabled: envFlag(process.env.MORNING_OUTREACH_ENABLED),
     morningCron: process.env.MORNING_OUTREACH_CRON ?? "0 8 * * *",
     eveningEnabled: process.env.EVENING_CHECKIN_ENABLED === "true",
     eveningCron: process.env.EVENING_CHECKIN_CRON ?? "0 20 * * *",

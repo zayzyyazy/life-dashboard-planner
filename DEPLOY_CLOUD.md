@@ -47,6 +47,8 @@ launchctl unload ~/Library/LaunchAgents/com.lifeplanner.agent.plist 2>/dev/null
    - `VAULT_PATH=/app/data/Brain-Vault`
    - `BRAIN_DATA_DIR=/app/data/brain`
    - `IDLE_NUDGE_ENABLED=false`
+   - `MORNING_OUTREACH_ENABLED=false`
+   - `DAILY_BRIEF_ENABLED=false`
    - `EVENING_CHECKIN_ENABLED=false`
    - `STALE_PROJECT_NUDGE_ENABLED=false`
    - `VAULT_GIT_SYNC=true` (optional — sync vault to GitHub)
